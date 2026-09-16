@@ -135,6 +135,40 @@ export default async function MyCaseDetailPage({
     throw new Error(incidentError.message)
   }
 
+  const feedbackPairs = await Promise.all(
+    (incidents ?? [])
+      .filter((incident) =>
+        ['needs_revision', 'rejected'].includes(
+          incident.moderation_status
+        )
+      )
+      .map(async (incident) => {
+        const { data, error } = await supabase.rpc(
+          'get_incident_feedback',
+          {
+            p_incident_id: incident.id,
+          }
+        )
+
+        if (error) {
+          console.error(
+            'get_incident_feedback error:',
+            error
+          )
+
+          return [incident.id, null] as const
+        }
+
+        const feedback = Array.isArray(data)
+          ? data[0] ?? null
+          : data ?? null
+
+        return [incident.id, feedback] as const
+      })
+  )
+
+  const feedbackByIncident = new Map(feedbackPairs)
+
   return (
     <main className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-5xl px-6 py-12">
@@ -307,6 +341,41 @@ export default async function MyCaseDetailPage({
                 {incident.moderation_status === 'pending' && (
                   <div className="mt-5 rounded-2xl bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
                     這筆新紀錄正在審核中；審核通過前不會顯示在公開案例頁。
+                  </div>
+                )}
+
+                {incident.moderation_status === 'needs_revision' && (
+                  <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                    <p className="font-medium text-amber-900">
+                      管理員要求修改
+                    </p>
+
+                    <p className="mt-1 text-sm leading-6 text-amber-800">
+                      {feedbackByIncident.get(incident.id)?.note ||
+                        '管理員要求補充或修正這筆紀錄。'}
+                    </p>
+
+                    <div className="mt-4">
+                      <Link
+                        href={`/my-cases/${vehicle.public_case_id}/incidents/${incident.id}/edit`}
+                        className="inline-flex rounded-xl bg-amber-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-amber-800"
+                      >
+                        修改並重新送審
+                      </Link>
+                    </div>
+                  </div>
+                )}
+
+                {incident.moderation_status === 'rejected' && (
+                  <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4">
+                    <p className="font-medium text-red-900">
+                      這筆紀錄未通過審核
+                    </p>
+
+                    <p className="mt-1 text-sm leading-6 text-red-800">
+                      {feedbackByIncident.get(incident.id)?.note ||
+                        '這筆紀錄已被管理員拒絕。'}
+                    </p>
                   </div>
                 )}
               </article>

@@ -25,6 +25,20 @@ const frequencyLabels: Record<string, string> = {
   repeated: '反覆發生',
 }
 
+const repairLabels: Record<string, string> = {
+  not_visited: '尚未回廠',
+  waiting_inspection: '等待檢查',
+  observe: '持續觀察',
+  no_fault_code: '查無故障碼',
+  waiting_parts: '等待零件',
+  parts_arrived: '零件已到',
+  repair_scheduled: '已排定維修',
+  repaired_warranty: '保固維修完成',
+  repaired_goodwill: '專案／善意維修完成',
+  repaired_self_paid: '自費維修完成',
+  completed: '已完成／結案',
+  other: '其他',
+}
 
 async function moderateCase(formData: FormData) {
   'use server'
@@ -63,25 +77,66 @@ async function moderateCase(formData: FormData) {
 
   revalidatePath('/admin')
   revalidatePath('/my-cases')
+  revalidatePath('/cases')
   revalidatePath('/')
 
   redirect(`/admin?done=${action}`)
 }
 
-const repairLabels: Record<string, string> = {
-  not_visited: '尚未回廠',
-  waiting_inspection: '等待檢查',
-  observe: '持續觀察',
-  no_fault_code: '查無故障碼',
-  waiting_parts: '等待零件',
-  parts_arrived: '零件已到',
-  repair_scheduled: '已排定維修',
-  repaired_warranty: '保固維修完成',
-  repaired_goodwill: '專案／善意維修完成',
-  repaired_self_paid: '自費維修完成',
-  completed: '已完成／結案',
-  other: '其他',
+async function moderateIncident(formData: FormData) {
+  'use server'
+
+  const incidentId = String(formData.get('incident_id') ?? '')
+  const publicCaseId = String(
+    formData.get('public_case_id') ?? ''
+  )
+  const action = String(formData.get('action') ?? '')
+  const note = String(formData.get('note') ?? '').trim()
+
+  if (
+    !incidentId ||
+    !publicCaseId ||
+    !['approved', 'needs_revision', 'rejected'].includes(action)
+  ) {
+    redirect('/admin?error=invalid_incident')
+  }
+
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
+  const { error } = await supabase.rpc(
+    'moderate_incident_atomic',
+    {
+      p_incident_id: incidentId,
+      p_action: action,
+      p_note: note || null,
+    }
+  )
+
+  if (error) {
+    console.error('moderate_incident_atomic error:', error)
+
+    redirect('/admin?error=incident_moderation')
+  }
+
+  revalidatePath('/admin')
+  revalidatePath('/my-cases')
+  revalidatePath(`/my-cases/${publicCaseId}`)
+  revalidatePath('/cases')
+  revalidatePath(`/cases/${publicCaseId}`)
+  revalidatePath('/')
+
+  redirect(`/admin?done=incident_${action}`)
 }
+
+export const dynamic = 'force-dynamic'
 
 export default async function AdminPage() {
   const supabase = await createClient()
@@ -101,24 +156,27 @@ export default async function AdminPage() {
     redirect('/')
   }
 
-  const { data: vehicles, error: vehicleError } = await supabase
-    .from('vehicles')
-    .select(`
-      id,
-      public_case_id,
-      model,
-      model_year,
-      moderation_status,
-      created_at
-    `)
-    .eq('moderation_status', 'pending')
-    .is('deleted_at', null)
-    .order('created_at', { ascending: true })
+  // 1. 尚未公開的新案件
+  const { data: pendingVehicles, error: vehicleError } =
+    await supabase
+      .from('vehicles')
+      .select(`
+        id,
+        public_case_id,
+        model,
+        model_year,
+        moderation_status,
+        created_at
+      `)
+      .eq('moderation_status', 'pending')
+      .is('deleted_at', null)
+      .order('created_at', { ascending: true })
 
-  const vehicleIds = vehicles?.map((vehicle) => vehicle.id) ?? []
+  const pendingVehicleIds =
+    pendingVehicles?.map((vehicle) => vehicle.id) ?? []
 
-  const { data: incidents, error: incidentError } =
-    vehicleIds.length > 0
+  const { data: newCaseIncidents, error: newCaseIncidentError } =
+    pendingVehicleIds.length > 0
       ? await supabase
           .from('incidents')
           .select(`
@@ -137,16 +195,91 @@ export default async function AdminPage() {
             quoted_amount,
             moderation_status
           `)
-          .in('vehicle_id', vehicleIds)
+          .in('vehicle_id', pendingVehicleIds)
           .order('incident_number', { ascending: true })
       : { data: [], error: null }
 
-  const hasError = vehicleError || incidentError
+  // 2. 所有 pending incident
+  const {
+    data: allPendingIncidents,
+    error: pendingIncidentError,
+  } = await supabase
+    .from('incidents')
+    .select(`
+      id,
+      vehicle_id,
+      incident_number,
+      mileage,
+      incident_date,
+      door_positions,
+      symptoms,
+      occurrence_frequency,
+      dealer_visited,
+      has_work_order,
+      repair_status,
+      has_quote,
+      quoted_amount,
+      moderation_status,
+      created_at
+    `)
+    .eq('moderation_status', 'pending')
+    .order('created_at', { ascending: true })
+
+  const pendingIncidentVehicleIds = [
+    ...new Set(
+      (allPendingIncidents ?? []).map(
+        (incident) => incident.vehicle_id
+      )
+    ),
+  ]
+
+  // 3. 只找「已公開案件」的 vehicle
+  //    因此不會跟上面的新案件重複。
+  const {
+    data: approvedVehiclesWithPendingIncidents,
+    error: followupVehicleError,
+  } =
+    pendingIncidentVehicleIds.length > 0
+      ? await supabase
+          .from('vehicles')
+          .select(`
+            id,
+            public_case_id,
+            model,
+            model_year,
+            moderation_status,
+            published_at
+          `)
+          .in('id', pendingIncidentVehicleIds)
+          .eq('moderation_status', 'approved')
+          .is('deleted_at', null)
+      : { data: [], error: null }
+
+  const approvedVehicleMap = new Map(
+    (approvedVehiclesWithPendingIncidents ?? []).map(
+      (vehicle) => [vehicle.id, vehicle]
+    )
+  )
+
+  const pendingFollowupIncidents =
+    (allPendingIncidents ?? []).filter((incident) =>
+      approvedVehicleMap.has(incident.vehicle_id)
+    )
+
+  const hasError =
+    vehicleError ||
+    newCaseIncidentError ||
+    pendingIncidentError ||
+    followupVehicleError
+
+  const newCaseCount = pendingVehicles?.length ?? 0
+  const followupCount = pendingFollowupIncidents.length
+  const totalPending = newCaseCount + followupCount
 
   return (
     <main className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-6xl px-6 py-12">
-        <div className="flex items-start justify-between gap-6">
+        <header className="flex flex-wrap items-start justify-between gap-6">
           <div>
             <Link
               href="/"
@@ -160,215 +293,484 @@ export default async function AdminPage() {
             </p>
 
             <h1 className="mt-1 text-3xl font-semibold text-gray-950">
-              待審核案件
+              審核中心
             </h1>
 
             <p className="mt-2 text-sm text-gray-600">
-              檢查車主提交的案件內容，再決定是否公開。
+              審核新案件，以及已公開案件新增的後續紀錄。
             </p>
           </div>
 
-          <div className="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
-            {vehicles?.length ?? 0} 件待審核
+          <div className="flex flex-wrap gap-2">
+            <span className="rounded-full bg-white px-3 py-1 text-sm font-medium text-gray-700 shadow-sm">
+              新案件 {newCaseCount}
+            </span>
+
+            <span className="rounded-full bg-white px-3 py-1 text-sm font-medium text-gray-700 shadow-sm">
+              後續紀錄 {followupCount}
+            </span>
+
+            <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
+              共 {totalPending} 件待審
+            </span>
           </div>
-        </div>
+        </header>
 
         {hasError && (
           <div className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-            讀取待審核案件失敗：
-            {vehicleError?.message ?? incidentError?.message}
+            審核資料讀取失敗：
+            {vehicleError?.message ??
+              newCaseIncidentError?.message ??
+              pendingIncidentError?.message ??
+              followupVehicleError?.message}
           </div>
         )}
 
-        {!hasError && (!vehicles || vehicles.length === 0) && (
-          <section className="mt-10 rounded-3xl border border-dashed border-gray-300 bg-white p-12 text-center">
-            <h2 className="font-semibold text-gray-950">
-              目前沒有待審核案件
-            </h2>
-            <p className="mt-2 text-sm text-gray-500">
-              新案件送出後會出現在這裡。
-            </p>
-          </section>
-        )}
+        {!hasError && (
+          <>
+            {/* 後續紀錄 */}
+            <section className="mt-10">
+              <div>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-semibold text-gray-950">
+                    待審後續紀錄
+                  </h2>
 
-        {!hasError && vehicles && vehicles.length > 0 && (
-          <div className="mt-10 space-y-6">
-            {vehicles.map((vehicle) => {
-              const vehicleIncidents =
-                incidents?.filter(
-                  (incident) => incident.vehicle_id === vehicle.id
-                ) ?? []
+                  <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                    {followupCount}
+                  </span>
+                </div>
 
-              return (
-                <article
-                  key={vehicle.id}
-                  className="overflow-hidden rounded-3xl bg-white shadow-sm"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 p-6">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">
-                        {vehicle.public_case_id}
-                      </p>
+                <p className="mt-1 text-sm text-gray-500">
+                  已公開案件新增的故障或維修紀錄。
+                  核准前不會出現在公開案例中。
+                </p>
+              </div>
 
-                      <h2 className="mt-1 text-2xl font-semibold text-gray-950">
-                        {vehicle.model_year} {vehicle.model}
-                      </h2>
+              {pendingFollowupIncidents.length === 0 ? (
+                <div className="mt-5 rounded-3xl border border-dashed border-gray-300 bg-white p-10 text-center">
+                  <p className="font-medium text-gray-900">
+                    目前沒有待審後續紀錄
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-5 space-y-6">
+                  {pendingFollowupIncidents.map((incident) => {
+                    const vehicle = approvedVehicleMap.get(
+                      incident.vehicle_id
+                    )
 
-                      <p className="mt-2 text-sm text-gray-500">
-                        提交日期：
-                        {new Date(vehicle.created_at).toLocaleDateString(
-                          'zh-TW'
-                        )}
-                      </p>
-                    </div>
+                    if (!vehicle) return null
 
-                    <span className="rounded-full bg-amber-50 px-3 py-1 text-sm font-medium text-amber-700">
-                      待審核
-                    </span>
-                  </div>
-
-                  <div className="space-y-6 p-6">
-                    {vehicleIncidents.map((incident) => (
-                      <section
+                    return (
+                      <article
                         key={incident.id}
-                        className="rounded-2xl border border-gray-200 p-5"
+                        className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"
                       >
-                        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 p-6">
                           <div>
-                            <p className="text-xs text-gray-500">里程</p>
-                            <p className="mt-1 font-medium text-gray-950">
-                              {incident.mileage.toLocaleString()} km
+                            <p className="text-sm font-medium text-gray-500">
+                              {vehicle.public_case_id}
+                            </p>
+
+                            <h3 className="mt-1 text-2xl font-semibold text-gray-950">
+                              {vehicle.model_year} {vehicle.model}
+                            </h3>
+
+                            <p className="mt-2 text-sm font-medium text-blue-700">
+                              第 {incident.incident_number} 次紀錄
                             </p>
                           </div>
 
-                          <div>
-                            <p className="text-xs text-gray-500">發生日期</p>
-                            <p className="mt-1 font-medium text-gray-950">
-                              {incident.incident_date ?? '未填寫'}
-                            </p>
-                          </div>
+                          <span className="rounded-full bg-amber-50 px-3 py-1 text-sm font-medium text-amber-700">
+                            後續紀錄待審
+                          </span>
+                        </div>
 
-                          <div>
-                            <p className="text-xs text-gray-500">發生頻率</p>
-                            <p className="mt-1 font-medium text-gray-950">
-                              {incident.occurrence_frequency
-                                ? frequencyLabels[
+                        <div className="p-6">
+                          <div className="grid gap-5 rounded-2xl border border-gray-200 p-5 sm:grid-cols-2 lg:grid-cols-3">
+                            <div>
+                              <p className="text-xs text-gray-500">
+                                發生里程
+                              </p>
+
+                              <p className="mt-1 font-medium text-gray-950">
+                                {incident.mileage.toLocaleString()} km
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs text-gray-500">
+                                發生日期
+                              </p>
+
+                              <p className="mt-1 font-medium text-gray-950">
+                                {incident.incident_date ?? '未填寫'}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs text-gray-500">
+                                發生頻率
+                              </p>
+
+                              <p className="mt-1 font-medium text-gray-950">
+                                {incident.occurrence_frequency
+                                  ? frequencyLabels[
+                                      incident.occurrence_frequency
+                                    ] ??
                                     incident.occurrence_frequency
-                                  ] ?? incident.occurrence_frequency
-                                : '未填寫'}
+                                  : '未填寫'}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs text-gray-500">
+                                問題位置
+                              </p>
+
+                              <p className="mt-1 font-medium text-gray-950">
+                                {incident.door_positions
+                                  .map(
+                                    (value: string) =>
+                                      doorLabels[value] ?? value
+                                  )
+                                  .join('、')}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs text-gray-500">
+                                症狀
+                              </p>
+
+                              <p className="mt-1 font-medium text-gray-950">
+                                {incident.symptoms
+                                  .map(
+                                    (value: string) =>
+                                      symptomLabels[value] ?? value
+                                  )
+                                  .join('、')}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs text-gray-500">
+                                維修狀態
+                              </p>
+
+                              <p className="mt-1 font-medium text-gray-950">
+                                {repairLabels[
+                                  incident.repair_status
+                                ] ?? incident.repair_status}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs text-gray-500">
+                                Lexus 回廠
+                              </p>
+
+                              <p className="mt-1 font-medium text-gray-950">
+                                {incident.dealer_visited ? '是' : '否'}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs text-gray-500">
+                                維修工單
+                              </p>
+
+                              <p className="mt-1 font-medium text-gray-950">
+                                {incident.has_work_order ? '有' : '無'}
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-xs text-gray-500">
+                                報價
+                              </p>
+
+                              <p className="mt-1 font-medium text-gray-950">
+                                {incident.has_quote
+                                  ? incident.quoted_amount !== null
+                                    ? `NT$ ${incident.quoted_amount.toLocaleString()}`
+                                    : '有'
+                                  : '無'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <form
+                            action={moderateIncident}
+                            className="mt-5 rounded-2xl bg-gray-50 p-5"
+                          >
+                            <input
+                              type="hidden"
+                              name="incident_id"
+                              value={incident.id}
+                            />
+
+                            <input
+                              type="hidden"
+                              name="public_case_id"
+                              value={vehicle.public_case_id}
+                            />
+
+                            <label className="block text-sm font-medium text-gray-700">
+                              管理員備註
+
+                              <textarea
+                                name="note"
+                                rows={3}
+                                placeholder="例如：後續維修資料完整，可公開。"
+                                className="mt-2 w-full resize-y rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-950 outline-none focus:border-gray-900"
+                              />
+                            </label>
+
+                            <div className="mt-5 flex flex-wrap justify-end gap-3">
+                              <button
+                                type="submit"
+                                name="action"
+                                value="rejected"
+                                className="rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-50"
+                              >
+                                拒絕
+                              </button>
+
+                              <button
+                                type="submit"
+                                name="action"
+                                value="needs_revision"
+                                className="rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-medium text-amber-700 hover:bg-amber-50"
+                              >
+                                要求修改
+                              </button>
+
+                              <button
+                                type="submit"
+                                name="action"
+                                value="approved"
+                                className="rounded-xl bg-gray-950 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+                              >
+                                核准這筆紀錄
+                              </button>
+                            </div>
+                          </form>
+                        </div>
+                      </article>
+                    )
+                  })}
+                </div>
+              )}
+            </section>
+
+            {/* 新案件 */}
+            <section className="mt-14 border-t border-gray-200 pt-10">
+              <div>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-xl font-semibold text-gray-950">
+                    待審新案件
+                  </h2>
+
+                  <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                    {newCaseCount}
+                  </span>
+                </div>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  尚未公開的新車主案件。
+                </p>
+              </div>
+
+              {!pendingVehicles ||
+              pendingVehicles.length === 0 ? (
+                <div className="mt-5 rounded-3xl border border-dashed border-gray-300 bg-white p-10 text-center">
+                  <p className="font-medium text-gray-900">
+                    目前沒有待審新案件
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-5 space-y-6">
+                  {pendingVehicles.map((vehicle) => {
+                    const vehicleIncidents =
+                      newCaseIncidents?.filter(
+                        (incident) =>
+                          incident.vehicle_id === vehicle.id
+                      ) ?? []
+
+                    return (
+                      <article
+                        key={vehicle.id}
+                        className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 p-6">
+                          <div>
+                            <p className="text-sm font-medium text-gray-500">
+                              {vehicle.public_case_id}
+                            </p>
+
+                            <h3 className="mt-1 text-2xl font-semibold text-gray-950">
+                              {vehicle.model_year} {vehicle.model}
+                            </h3>
+
+                            <p className="mt-2 text-sm text-gray-500">
+                              提交日期：
+                              {new Date(
+                                vehicle.created_at
+                              ).toLocaleDateString('zh-TW')}
                             </p>
                           </div>
 
-                          <div>
-                            <p className="text-xs text-gray-500">問題位置</p>
-                            <p className="mt-1 font-medium text-gray-950">
-                              {incident.door_positions
-                                .map(
-                                  (value: string) =>
-                                    doorLabels[value] ?? value
-                                )
-                                .join('、')}
-                            </p>
-                          </div>
-
-                          <div>
-                            <p className="text-xs text-gray-500">症狀</p>
-                            <p className="mt-1 font-medium text-gray-950">
-                              {incident.symptoms
-                                .map(
-                                  (value: string) =>
-                                    symptomLabels[value] ?? value
-                                )
-                                .join('、')}
-                            </p>
-                          </div>
-
-                          <div>
-                            <p className="text-xs text-gray-500">維修狀態</p>
-                            <p className="mt-1 font-medium text-gray-950">
-                              {repairLabels[incident.repair_status] ??
-                                incident.repair_status}
-                            </p>
-                          </div>
+                          <span className="rounded-full bg-amber-50 px-3 py-1 text-sm font-medium text-amber-700">
+                            新案件待審
+                          </span>
                         </div>
 
-                        <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 border-t border-gray-100 pt-4 text-sm text-gray-600">
-                          <span>
-                            回廠：
-                            {incident.dealer_visited ? '是' : '否'}
-                          </span>
+                        <div className="space-y-6 p-6">
+                          {vehicleIncidents.map((incident) => (
+                            <section
+                              key={incident.id}
+                              className="rounded-2xl border border-gray-200 p-5"
+                            >
+                              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                                <div>
+                                  <p className="text-xs text-gray-500">
+                                    里程
+                                  </p>
+                                  <p className="mt-1 font-medium text-gray-950">
+                                    {incident.mileage.toLocaleString()} km
+                                  </p>
+                                </div>
 
-                          <span>
-                            工單：
-                            {incident.has_work_order ? '有' : '無'}
-                          </span>
+                                <div>
+                                  <p className="text-xs text-gray-500">
+                                    發生日期
+                                  </p>
+                                  <p className="mt-1 font-medium text-gray-950">
+                                    {incident.incident_date ??
+                                      '未填寫'}
+                                  </p>
+                                </div>
 
-                          <span>
-                            報價：
-                            {incident.has_quote
-                              ? incident.quoted_amount !== null
-                                ? `NT$ ${incident.quoted_amount.toLocaleString()}`
-                                : '有'
-                              : '無'}
-                          </span>
+                                <div>
+                                  <p className="text-xs text-gray-500">
+                                    發生頻率
+                                  </p>
+                                  <p className="mt-1 font-medium text-gray-950">
+                                    {incident.occurrence_frequency
+                                      ? frequencyLabels[
+                                          incident
+                                            .occurrence_frequency
+                                        ] ??
+                                        incident.occurrence_frequency
+                                      : '未填寫'}
+                                  </p>
+                                </div>
+
+                                <div>
+                                  <p className="text-xs text-gray-500">
+                                    問題位置
+                                  </p>
+                                  <p className="mt-1 font-medium text-gray-950">
+                                    {incident.door_positions
+                                      .map(
+                                        (value: string) =>
+                                          doorLabels[value] ??
+                                          value
+                                      )
+                                      .join('、')}
+                                  </p>
+                                </div>
+
+                                <div>
+                                  <p className="text-xs text-gray-500">
+                                    症狀
+                                  </p>
+                                  <p className="mt-1 font-medium text-gray-950">
+                                    {incident.symptoms
+                                      .map(
+                                        (value: string) =>
+                                          symptomLabels[value] ??
+                                          value
+                                      )
+                                      .join('、')}
+                                  </p>
+                                </div>
+
+                                <div>
+                                  <p className="text-xs text-gray-500">
+                                    維修狀態
+                                  </p>
+                                  <p className="mt-1 font-medium text-gray-950">
+                                    {repairLabels[
+                                      incident.repair_status
+                                    ] ??
+                                      incident.repair_status}
+                                  </p>
+                                </div>
+                              </div>
+                            </section>
+                          ))}
+
+                          <form
+                            action={moderateCase}
+                            className="rounded-2xl bg-gray-50 p-5"
+                          >
+                            <input
+                              type="hidden"
+                              name="vehicle_id"
+                              value={vehicle.id}
+                            />
+
+                            <label className="block text-sm font-medium text-gray-700">
+                              管理員備註
+
+                              <textarea
+                                name="note"
+                                rows={3}
+                                placeholder="例如：資料完整，可公開。"
+                                className="mt-2 w-full resize-y rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-950 outline-none focus:border-gray-900"
+                              />
+                            </label>
+
+                            <div className="mt-5 flex flex-wrap justify-end gap-3">
+                              <button
+                                type="submit"
+                                name="action"
+                                value="rejected"
+                                className="rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-50"
+                              >
+                                拒絕
+                              </button>
+
+                              <button
+                                type="submit"
+                                name="action"
+                                value="needs_revision"
+                                className="rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-medium text-amber-700 hover:bg-amber-50"
+                              >
+                                要求修改
+                              </button>
+
+                              <button
+                                type="submit"
+                                name="action"
+                                value="approved"
+                                className="rounded-xl bg-gray-950 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+                              >
+                                核准公開
+                              </button>
+                            </div>
+                          </form>
                         </div>
-                      </section>
-                    ))}
-
-                    <form
-                      action={moderateCase}
-                      className="rounded-2xl border border-gray-200 bg-gray-50 p-5"
-                    >
-                      <input
-                        type="hidden"
-                        name="vehicle_id"
-                        value={vehicle.id}
-                      />
-
-                      <label className="block text-sm font-medium text-gray-700">
-                        管理員備註
-                        <textarea
-                          name="note"
-                          rows={3}
-                          placeholder="例如：資料完整，可公開。或說明需要車主補充的內容。"
-                          className="mt-2 w-full resize-y rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-950 outline-none focus:border-gray-900"
-                        />
-                      </label>
-
-                      <div className="mt-5 flex flex-wrap justify-end gap-3">
-                        <button
-                          type="submit"
-                          name="action"
-                          value="rejected"
-                          className="rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-50"
-                        >
-                          拒絕
-                        </button>
-
-                        <button
-                          type="submit"
-                          name="action"
-                          value="needs_revision"
-                          className="rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-medium text-amber-700 hover:bg-amber-50"
-                        >
-                          要求修改
-                        </button>
-
-                        <button
-                          type="submit"
-                          name="action"
-                          value="approved"
-                          className="rounded-xl bg-gray-950 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
-                        >
-                          核准公開
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                </article>
-              )
-            })}
-          </div>
+                      </article>
+                    )
+                  })}
+                </div>
+              )}
+            </section>
+          </>
         )}
       </div>
     </main>

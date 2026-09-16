@@ -244,10 +244,10 @@ export default async function HomePage() {
               <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-950">
-                    問題車門分布
+                    問題車門出現率
                   </h2>
                   <p className="mt-1 text-sm text-gray-500">
-                    依公開故障紀錄統計
+                    各車門在公開故障紀錄中的出現比例，可複選
                   </p>
                 </div>
 

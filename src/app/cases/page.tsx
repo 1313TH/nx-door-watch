@@ -213,6 +213,42 @@ export default async function CasesPage({
     Boolean(symptom) ||
     sort !== 'published_newest'
 
+  const activeFilters = [
+    q
+      ? {
+          key: 'q',
+          label: `搜尋：${getParam('q')}`,
+        }
+      : null,
+    model
+      ? {
+          key: 'model',
+          label: `車型：${model}`,
+        }
+      : null,
+    year
+      ? {
+          key: 'year',
+          label: `年式：${year}`,
+        }
+      : null,
+    door
+      ? {
+          key: 'door',
+          label: `位置：${doorLabels[door] ?? door}`,
+        }
+      : null,
+    symptom
+      ? {
+          key: 'symptom',
+          label: `症狀：${symptomLabels[symptom] ?? symptom}`,
+        }
+      : null,
+  ].filter(Boolean) as {
+    key: string
+    label: string
+  }[]
+
   return (
     <main className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-6xl px-6 py-12">
@@ -389,6 +425,30 @@ export default async function CasesPage({
             </div>
           </div>
         </form>
+
+        {activeFilters.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-xs font-medium text-gray-500">
+              已套用
+            </span>
+
+            {activeFilters.map((filter) => (
+              <span
+                key={filter.key}
+                className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700"
+              >
+                {filter.label}
+              </span>
+            ))}
+
+            <Link
+              href="/cases"
+              className="ml-1 text-xs font-medium text-gray-500 underline underline-offset-4 hover:text-gray-950"
+            >
+              全部清除
+            </Link>
+          </div>
+        )}
 
         {hasError && (
           <div className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">

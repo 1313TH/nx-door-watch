@@ -40,7 +40,25 @@ const repairLabels: Record<string, string> = {
 
 export const dynamic = 'force-dynamic'
 
-export default async function CasesPage() {
+export default async function CasesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const params = await searchParams
+
+  const getParam = (key: string) => {
+    const value = params[key]
+    return typeof value === 'string' ? value : ''
+  }
+
+  const q = getParam('q').trim().toLowerCase()
+  const model = getParam('model')
+  const year = getParam('year')
+  const door = getParam('door')
+  const symptom = getParam('symptom')
+  const sort = getParam('sort') || 'published_newest'
+
   const supabase = createPublicClient()
 
   const { data: vehicles, error: vehicleError } = await supabase
@@ -77,7 +95,123 @@ export default async function CasesPage() {
           .order('incident_number', { ascending: true })
       : { data: [], error: null }
 
+  const publicCases = vehicles ?? []
+  const publicIncidents = incidents ?? []
+
+  const modelOptions = [...new Set(publicCases.map((item) => item.model))]
+    .filter(Boolean)
+    .sort()
+
+  const yearOptions = [
+    ...new Set(publicCases.map((item) => String(item.model_year))),
+  ]
+    .filter(Boolean)
+    .sort((a, b) => Number(b) - Number(a))
+
+  const incidentsForVehicle = (vehicleId: string) =>
+    publicIncidents.filter(
+      (incident) => incident.vehicle_id === vehicleId
+    )
+
+  const latestIncidentForVehicle = (vehicleId: string) => {
+    const list = incidentsForVehicle(vehicleId)
+
+    return [...list].sort((a, b) => {
+      const aDate = a.incident_date
+        ? new Date(a.incident_date).getTime()
+        : 0
+
+      const bDate = b.incident_date
+        ? new Date(b.incident_date).getTime()
+        : 0
+
+      return bDate - aDate
+    })[0]
+  }
+
+  let filteredCases = publicCases.filter((vehicle) => {
+    const vehicleIncidents = incidentsForVehicle(vehicle.id)
+
+    const matchesSearch =
+      !q ||
+      vehicle.public_case_id.toLowerCase().includes(q) ||
+      vehicle.model.toLowerCase().includes(q) ||
+      String(vehicle.model_year).includes(q)
+
+    const matchesModel =
+      !model || vehicle.model === model
+
+    const matchesYear =
+      !year || String(vehicle.model_year) === year
+
+    const matchesDoor =
+      !door ||
+      vehicleIncidents.some((incident) =>
+        incident.door_positions?.includes(door)
+      )
+
+    const matchesSymptom =
+      !symptom ||
+      vehicleIncidents.some((incident) =>
+        incident.symptoms?.includes(symptom)
+      )
+
+    return (
+      matchesSearch &&
+      matchesModel &&
+      matchesYear &&
+      matchesDoor &&
+      matchesSymptom
+    )
+  })
+
+  filteredCases = [...filteredCases].sort((a, b) => {
+    if (sort === 'incident_newest') {
+      const aIncident = latestIncidentForVehicle(a.id)
+      const bIncident = latestIncidentForVehicle(b.id)
+
+      const aDate = aIncident?.incident_date
+        ? new Date(aIncident.incident_date).getTime()
+        : 0
+
+      const bDate = bIncident?.incident_date
+        ? new Date(bIncident.incident_date).getTime()
+        : 0
+
+      return bDate - aDate
+    }
+
+    if (sort === 'mileage_asc' || sort === 'mileage_desc') {
+      const aMileage =
+        incidentsForVehicle(a.id)[0]?.mileage ?? 0
+      const bMileage =
+        incidentsForVehicle(b.id)[0]?.mileage ?? 0
+
+      return sort === 'mileage_asc'
+        ? aMileage - bMileage
+        : bMileage - aMileage
+    }
+
+    const aPublished = a.published_at
+      ? new Date(a.published_at).getTime()
+      : 0
+
+    const bPublished = b.published_at
+      ? new Date(b.published_at).getTime()
+      : 0
+
+    return bPublished - aPublished
+  })
+
   const hasError = vehicleError || incidentError
+
+  const hasFilters =
+    Boolean(q) ||
+    Boolean(model) ||
+    Boolean(year) ||
+    Boolean(door) ||
+    Boolean(symptom) ||
+    sort !== 'published_newest'
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -100,43 +234,206 @@ export default async function CasesPage() {
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
-              此處只顯示已經過管理員審核並公開的匿名案例資料，
-              不包含車主帳號或個人識別資訊。
+              搜尋與篩選已通過管理員審核的匿名車主案例。
             </p>
           </div>
 
           <div className="rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm">
-            {vehicles?.length ?? 0} 件公開案例
+            {filteredCases.length} 件符合條件
           </div>
         </header>
 
+        <form
+          action="/cases"
+          method="get"
+          className="mt-9 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"
+        >
+          <div className="grid gap-4 lg:grid-cols-6">
+            <label className="lg:col-span-2">
+              <span className="text-xs font-medium text-gray-500">
+                搜尋
+              </span>
+
+              <input
+                type="search"
+                name="q"
+                defaultValue={getParam('q')}
+                placeholder="案件編號、車型或年式"
+                className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-950 outline-none focus:border-gray-900"
+              />
+            </label>
+
+            <label>
+              <span className="text-xs font-medium text-gray-500">
+                車型
+              </span>
+
+              <select
+                name="model"
+                defaultValue={model}
+                className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm"
+              >
+                <option value="">全部車型</option>
+
+                {modelOptions.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              <span className="text-xs font-medium text-gray-500">
+                年式
+              </span>
+
+              <select
+                name="year"
+                defaultValue={year}
+                className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm"
+              >
+                <option value="">全部年式</option>
+
+                {yearOptions.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              <span className="text-xs font-medium text-gray-500">
+                問題位置
+              </span>
+
+              <select
+                name="door"
+                defaultValue={door}
+                className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm"
+              >
+                <option value="">全部位置</option>
+
+                {Object.entries(doorLabels).map(([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              <span className="text-xs font-medium text-gray-500">
+                症狀
+              </span>
+
+              <select
+                name="symptom"
+                defaultValue={symptom}
+                className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm"
+              >
+                <option value="">全部症狀</option>
+
+                {Object.entries(symptomLabels).map(([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-end justify-between gap-4 border-t border-gray-100 pt-4">
+            <label className="min-w-52">
+              <span className="text-xs font-medium text-gray-500">
+                排序
+              </span>
+
+              <select
+                name="sort"
+                defaultValue={sort}
+                className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm"
+              >
+                <option value="published_newest">
+                  最新公開
+                </option>
+                <option value="incident_newest">
+                  最新發生日期
+                </option>
+                <option value="mileage_asc">
+                  里程低 → 高
+                </option>
+                <option value="mileage_desc">
+                  里程高 → 低
+                </option>
+              </select>
+            </label>
+
+            <div className="flex gap-2">
+              {hasFilters && (
+                <Link
+                  href="/cases"
+                  className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  清除篩選
+                </Link>
+              )}
+
+              <button
+                type="submit"
+                className="rounded-xl bg-gray-950 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+              >
+                套用
+              </button>
+            </div>
+          </div>
+        </form>
+
         {hasError && (
-          <div className="mt-10 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
+          <div className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
             公開案例讀取失敗：
             {vehicleError?.message ?? incidentError?.message}
           </div>
         )}
 
-        {!hasError && (!vehicles || vehicles.length === 0) && (
-          <section className="mt-10 rounded-3xl border border-dashed border-gray-300 bg-white p-12 text-center">
+        {!hasError && filteredCases.length === 0 && (
+          <section className="mt-8 rounded-3xl border border-dashed border-gray-300 bg-white p-12 text-center">
             <h2 className="font-semibold text-gray-950">
-              目前還沒有公開案例
+              找不到符合條件的案例
             </h2>
+
             <p className="mt-2 text-sm text-gray-500">
-              經審核核准的案例會出現在這裡。
+              可以調整搜尋文字或清除部分篩選條件。
             </p>
+
+            <Link
+              href="/cases"
+              className="mt-5 inline-block rounded-xl bg-gray-950 px-5 py-2.5 text-sm font-medium text-white"
+            >
+              顯示全部案例
+            </Link>
           </section>
         )}
 
-        {!hasError && vehicles && vehicles.length > 0 && (
-          <div className="mt-10 grid gap-5">
-            {vehicles.map((vehicle) => {
+        {!hasError && filteredCases.length > 0 && (
+          <div className="mt-8 grid gap-5">
+            {filteredCases.map((vehicle) => {
               const vehicleIncidents =
-                incidents?.filter(
-                  (incident) => incident.vehicle_id === vehicle.id
-                ) ?? []
+                incidentsForVehicle(vehicle.id)
 
-              const firstIncident = vehicleIncidents[0]
+              const representativeIncident =
+                vehicleIncidents.find((incident) => {
+                  const matchesDoor =
+                    !door ||
+                    incident.door_positions?.includes(door)
+
+                  const matchesSymptom =
+                    !symptom ||
+                    incident.symptoms?.includes(symptom)
+
+                  return matchesDoor && matchesSymptom
+                }) ?? vehicleIncidents[0]
 
               return (
                 <Link
@@ -160,63 +457,81 @@ export default async function CasesPage() {
                     </span>
                   </div>
 
-                  {firstIncident && (
-                    <div className="mt-6 grid gap-5 border-t border-gray-100 pt-5 sm:grid-cols-2 lg:grid-cols-4">
-                      <div>
-                        <p className="text-xs text-gray-500">發生里程</p>
-                        <p className="mt-1 font-medium text-gray-950">
-                          {firstIncident.mileage.toLocaleString()} km
-                        </p>
+                  {representativeIncident && (
+                    <>
+                      <div className="mt-6 grid gap-5 border-t border-gray-100 pt-5 sm:grid-cols-2 lg:grid-cols-4">
+                        <div>
+                          <p className="text-xs text-gray-500">
+                            發生里程
+                          </p>
+
+                          <p className="mt-1 font-medium text-gray-950">
+                            {representativeIncident.mileage.toLocaleString()} km
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-xs text-gray-500">
+                            問題位置
+                          </p>
+
+                          <p className="mt-1 font-medium text-gray-950">
+                            {representativeIncident.door_positions
+                              .map(
+                                (value: string) =>
+                                  doorLabels[value] ?? value
+                              )
+                              .join('、')}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-xs text-gray-500">
+                            症狀
+                          </p>
+
+                          <p className="mt-1 font-medium text-gray-950">
+                            {representativeIncident.symptoms
+                              .map(
+                                (value: string) =>
+                                  symptomLabels[value] ?? value
+                              )
+                              .join('、')}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-xs text-gray-500">
+                            維修狀態
+                          </p>
+
+                          <p className="mt-1 font-medium text-gray-950">
+                            {repairLabels[
+                              representativeIncident.repair_status
+                            ] ??
+                              representativeIncident.repair_status}
+                          </p>
+                        </div>
                       </div>
 
-                      <div>
-                        <p className="text-xs text-gray-500">問題位置</p>
-                        <p className="mt-1 font-medium text-gray-950">
-                          {firstIncident.door_positions
-                            .map(
-                              (value: string) =>
-                                doorLabels[value] ?? value
-                            )
-                            .join('、')}
-                        </p>
+                      <div className="mt-5 flex flex-wrap gap-2 text-xs text-gray-500">
+                        {representativeIncident.occurrence_frequency && (
+                          <span className="rounded-full bg-gray-100 px-3 py-1">
+                            {frequencyLabels[
+                              representativeIncident.occurrence_frequency
+                            ] ??
+                              representativeIncident.occurrence_frequency}
+                          </span>
+                        )}
+
+                        {representativeIncident.incident_date && (
+                          <span className="rounded-full bg-gray-100 px-3 py-1">
+                            發生日期{' '}
+                            {representativeIncident.incident_date}
+                          </span>
+                        )}
                       </div>
-
-                      <div>
-                        <p className="text-xs text-gray-500">症狀</p>
-                        <p className="mt-1 font-medium text-gray-950">
-                          {firstIncident.symptoms
-                            .map(
-                              (value: string) =>
-                                symptomLabels[value] ?? value
-                            )
-                            .join('、')}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs text-gray-500">維修狀態</p>
-                        <p className="mt-1 font-medium text-gray-950">
-                          {repairLabels[firstIncident.repair_status] ??
-                            firstIncident.repair_status}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {firstIncident && (
-                    <div className="mt-5 flex flex-wrap gap-2 text-xs text-gray-500">
-                      <span className="rounded-full bg-gray-100 px-3 py-1">
-                        {frequencyLabels[
-                          firstIncident.occurrence_frequency
-                        ] ?? firstIncident.occurrence_frequency}
-                      </span>
-
-                      {firstIncident.incident_date && (
-                        <span className="rounded-full bg-gray-100 px-3 py-1">
-                          發生日期 {firstIncident.incident_date}
-                        </span>
-                      )}
-                    </div>
+                    </>
                   )}
 
                   <div className="mt-5 text-sm font-medium text-gray-700 transition group-hover:text-gray-950">

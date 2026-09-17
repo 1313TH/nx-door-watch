@@ -1,4 +1,6 @@
 import Link from 'next/link'
+import { LogoutButton } from '@/components/logout-button'
+import { UserAvatar } from '@/components/user-avatar'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createPublicClient } from '@/lib/supabase/public'
 
@@ -138,6 +140,13 @@ export default async function HomePage() {
                     管理後台
                   </Link>
                 )}
+              <UserAvatar
+                email={user.email}
+                avatarUrl={user.user_metadata?.avatar_url}
+                fullName={user.user_metadata?.full_name}
+              />
+
+              <LogoutButton />
               </>
             ) : (
               <Link

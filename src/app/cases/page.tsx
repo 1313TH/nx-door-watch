@@ -279,10 +279,24 @@ export default async function CasesPage({
           </div>
         </header>
 
+      <details className="group mt-9 md:contents">
+        <summary className="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5 text-sm font-medium text-gray-900 shadow-sm md:hidden">
+          <span>
+            搜尋與篩選條件
+            {activeFilters.length > 0 && (
+              <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                {activeFilters.length}
+              </span>
+            )}
+          </span>
+          <span className="text-gray-500 transition-transform group-open:rotate-180">
+            ↓
+          </span>
+        </summary>
         <form
           action="/cases"
           method="get"
-          className="mt-9 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"
+          className="hidden rounded-3xl group-open:block md:mt-9 md:block border border-gray-200 bg-white p-5 shadow-sm"
         >
           <div className="grid gap-4 lg:grid-cols-6">
             <label className="lg:col-span-2">
@@ -425,6 +439,7 @@ export default async function CasesPage({
             </div>
           </div>
         </form>
+      </details>
 
         {activeFilters.length > 0 && (
           <div className="mt-4 flex flex-wrap items-center gap-2">

@@ -6,8 +6,10 @@ function getStatusLabel(status: string) {
   switch (status) {
     case 'approved':
       return '已公開'
-    case 'rejected':
+    case 'needs_revision':
       return '需修改'
+    case 'rejected':
+      return '未通過'
     case 'deleted':
       return '已移除'
     default:
@@ -39,6 +41,7 @@ export default async function MyCasesPage() {
     `)
     .eq('owner_id', user.id)
     .is('deleted_at', null)
+    .is('archived_at', null)
     .order('created_at', { ascending: false })
 
   return (
@@ -122,6 +125,44 @@ export default async function MyCasesPage() {
                   <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
                     {getStatusLabel(vehicle.moderation_status)}
                   </span>
+                </div>
+
+                <div className="mt-5 flex flex-wrap gap-2 border-t border-gray-100 pt-4">
+                  {['pending', 'needs_revision'].includes(
+                    vehicle.moderation_status
+                  ) && (
+                    <Link
+                      href={`/my-cases/${vehicle.public_case_id}/edit`}
+                      className="rounded-xl bg-gray-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+                    >
+                      修改案件
+                    </Link>
+                  )}
+
+                  {vehicle.moderation_status === 'approved' && (
+                    <>
+                      <Link
+                        href={`/my-cases/${vehicle.public_case_id}/request-edit`}
+                        className="rounded-xl bg-gray-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+                      >
+                        申請修改
+                      </Link>
+
+                      <Link
+                        href={`/my-cases/${vehicle.public_case_id}/request-archive`}
+                        className="rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-50"
+                      >
+                        申請下架
+                      </Link>
+                    </>
+                  )}
+
+                  <Link
+                    href={`/my-cases/${vehicle.public_case_id}`}
+                    className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                  >
+                    查看案件
+                  </Link>
                 </div>
               </article>
             ))}

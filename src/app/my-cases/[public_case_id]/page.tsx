@@ -131,6 +131,7 @@ export default async function MyCaseDetailPage({
     updated?: string
     withdrawn?: string
     resubmitted?: string
+    case_updated?: string
     error?: string
   }>
 }) {
@@ -247,6 +248,12 @@ export default async function MyCaseDetailPage({
           </div>
         )}
 
+        {query.case_updated === '1' && (
+          <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+            案件資料已更新，並重新送交管理員審核。
+          </div>
+        )}
+
         {query.withdrawn === '1' && (
           <div className="mt-6 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
             紀錄已撤回，不會進入管理員審核或顯示於公開案例。
@@ -291,6 +298,23 @@ export default async function MyCaseDetailPage({
                 vehicle.moderation_status}
             </span>
           </div>
+
+          {['pending', 'needs_revision'].includes(
+            vehicle.moderation_status
+          ) && (
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link
+                href={`/my-cases/${vehicle.public_case_id}/edit`}
+                className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-900 transition hover:bg-gray-50"
+              >
+                修改案件
+              </Link>
+
+              <p className="flex items-center text-xs text-gray-500">
+                修改後會重新進入審核。
+              </p>
+            </div>
+          )}
 
           <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-gray-50 p-4">
             <p className="text-sm leading-6 text-gray-600">

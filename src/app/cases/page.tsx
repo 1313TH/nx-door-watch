@@ -513,7 +513,7 @@ export default async function CasesPage({
               return (
                 <Link
                   key={vehicle.id}
-                  href={`/cases/${vehicle.public_case_id}`}
+                  href={`/cases/${vehicle.public_case_id}?from=cases`}
                   className="group block rounded-3xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-4">

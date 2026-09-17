@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import AdminOwnerContact from '@/components/admin/AdminOwnerContact'
 
 const doorLabels: Record<string, string> = {
   front_left: '左前門',
@@ -173,6 +174,40 @@ export default async function AdminPage({
     redirect('/')
   }
 
+  // 已公開案件的修改 / 下架申請數量
+  const {
+    count: pendingRevisionCount,
+    error: revisionCountError,
+  } = await supabase
+    .from('case_revisions')
+    .select('id', {
+      count: 'exact',
+      head: true,
+    })
+    .eq('target_type', 'vehicle')
+    .eq('status', 'pending')
+
+  const {
+    count: pendingArchiveCount,
+    error: archiveCountError,
+  } = await supabase
+    .from('case_archive_requests')
+    .select('id', {
+      count: 'exact',
+      head: true,
+    })
+    .eq('status', 'pending')
+
+  const requestRevisionCount =
+    pendingRevisionCount ?? 0
+
+  const requestArchiveCount =
+    pendingArchiveCount ?? 0
+
+  const requestTotal =
+    requestRevisionCount +
+    requestArchiveCount
+
   // 1. 尚未公開的新案件
   const { data: pendingVehicles, error: vehicleError } =
     await supabase
@@ -287,7 +322,9 @@ export default async function AdminPage({
     vehicleError ||
     newCaseIncidentError ||
     pendingIncidentError ||
-    followupVehicleError
+    followupVehicleError ||
+    revisionCountError ||
+    archiveCountError
 
   const newCaseCount = pendingVehicles?.length ?? 0
   const followupCount = pendingFollowupIncidents.length
@@ -342,6 +379,21 @@ export default async function AdminPage({
             <p className="mt-2 text-sm text-gray-600">
               審核新案件，以及已公開案件新增的後續紀錄。
             </p>
+
+            <Link
+              href="/admin/requests"
+              className="mt-4 inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-900 hover:bg-gray-50"
+            >
+              修改／下架／封存管理
+
+              {requestTotal > 0 && (
+                <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white">
+                  {requestTotal}
+                </span>
+              )}
+
+              <span>→</span>
+            </Link>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -358,6 +410,39 @@ export default async function AdminPage({
             </span>
           </div>
         </header>
+
+        {requestTotal > 0 && (
+          <Link
+            href="/admin/requests"
+            className="mt-8 block rounded-2xl border border-amber-200 bg-amber-50 p-5 transition hover:bg-amber-100"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="font-semibold text-amber-950">
+                  有新的案件申請需要處理
+                </p>
+
+                <div className="mt-2 flex flex-wrap gap-2 text-sm">
+                  {requestRevisionCount > 0 && (
+                    <span className="rounded-full bg-blue-100 px-3 py-1 font-medium text-blue-800">
+                      修改申請 {requestRevisionCount}
+                    </span>
+                  )}
+
+                  {requestArchiveCount > 0 && (
+                    <span className="rounded-full bg-red-100 px-3 py-1 font-medium text-red-800">
+                      下架申請 {requestArchiveCount}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <span className="text-sm font-medium text-amber-900">
+                前往處理 →
+              </span>
+            </div>
+          </Link>
+        )}
 
         {doneMessage && (
           <div className="mt-8 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-800">
@@ -420,7 +505,7 @@ export default async function AdminPage({
                     return (
                       <article
                         key={incident.id}
-                        className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"
+                        className="relative overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"
                       >
                         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 p-6">
                           <div>
@@ -431,6 +516,11 @@ export default async function AdminPage({
                             <h3 className="mt-1 text-2xl font-semibold text-gray-950">
                               {vehicle.model_year} {vehicle.model}
                             </h3>
+
+                            <AdminOwnerContact
+                              vehicleId={vehicle.id}
+                              className="mt-3 lg:absolute lg:right-6 lg:top-14 lg:mt-0"
+                            />
 
                             <p className="mt-2 text-sm font-medium text-blue-700">
                               第 {incident.incident_number} 次紀錄
@@ -657,7 +747,7 @@ export default async function AdminPage({
                     return (
                       <article
                         key={vehicle.id}
-                        className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"
+                        className="relative overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"
                       >
                         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 p-6">
                           <div>
@@ -668,6 +758,11 @@ export default async function AdminPage({
                             <h3 className="mt-1 text-2xl font-semibold text-gray-950">
                               {vehicle.model_year} {vehicle.model}
                             </h3>
+
+                            <AdminOwnerContact
+                              vehicleId={vehicle.id}
+                              className="mt-3 lg:absolute lg:right-6 lg:top-14 lg:mt-0"
+                            />
 
                             <p className="mt-2 text-sm text-gray-500">
                               提交日期：

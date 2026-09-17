@@ -43,10 +43,19 @@ export const dynamic = 'force-dynamic'
 
 export default async function CaseDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ public_case_id: string }>
+  searchParams: Promise<{ from?: string }>
 }) {
   const { public_case_id } = await params
+  const { from } = await searchParams
+
+  const backHref = from === 'home' ? '/' : '/cases'
+  const backLabel =
+    from === 'home'
+      ? '← 回首頁'
+      : '← 回公開案例'
 
   const supabase = createPublicClient()
 
@@ -96,10 +105,10 @@ export default async function CaseDetailPage({
     <main className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-5xl px-6 py-12">
         <Link
-          href="/cases"
+          href={backHref}
           className="text-sm text-gray-500 transition hover:text-gray-950"
         >
-          ← 回公開案例
+          {backLabel}
         </Link>
 
         <header className="mt-8 rounded-3xl border border-gray-200 bg-white p-7 shadow-sm">

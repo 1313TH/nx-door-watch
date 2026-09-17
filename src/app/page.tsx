@@ -3,6 +3,7 @@ import { LogoutButton } from '@/components/logout-button'
 import { UserAvatar } from '@/components/user-avatar'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createPublicClient } from '@/lib/supabase/public'
+import AdminOwnerContact from '@/components/admin/AdminOwnerContact'
 
 const doorLabels: Record<string, string> = {
   front_left: '左前門',
@@ -74,9 +75,13 @@ export default async function HomePage() {
   const doorCounts = Object.entries(doorLabels).map(([key, label]) => ({
     key,
     label,
-    count: publicIncidents.filter((incident) =>
-      incident.door_positions?.includes(key)
-    ).length,
+    count: new Set(
+      publicIncidents
+        .filter((incident) =>
+          incident.door_positions?.includes(key)
+        )
+        .map((incident) => incident.vehicle_id)
+    ).size,
   }))
 
   const maxDoorCount = Math.max(
@@ -91,9 +96,13 @@ export default async function HomePage() {
     .map(([key, label]) => ({
       key,
       label,
-      count: publicIncidents.filter((incident) =>
-        incident.symptoms?.includes(key)
-      ).length,
+      count: new Set(
+        publicIncidents
+          .filter((incident) =>
+            incident.symptoms?.includes(key)
+          )
+          .map((incident) => incident.vehicle_id)
+      ).size,
     }))
     .filter((item) => item.count > 0)
     .sort((a, b) => b.count - a.count)
@@ -256,16 +265,16 @@ export default async function HomePage() {
                     問題車門出現率
                   </h2>
                   <p className="mt-1 text-sm text-gray-500">
-                    各車門在公開故障紀錄中的出現比例，可複選
+                    公開案件中曾出現各車門問題的案件比例，可複選
                   </p>
                 </div>
 
                 <div className="mt-7 space-y-5">
                   {doorCounts.map((door) => {
                     const percentage =
-                      publicIncidents.length > 0
+                      publicCases.length > 0
                         ? Math.round(
-                            (door.count / publicIncidents.length) * 100
+                            (door.count / publicCases.length) * 100
                           )
                         : 0
 
@@ -285,7 +294,7 @@ export default async function HomePage() {
                           </span>
 
                           <span className="text-gray-500">
-                            {door.count} 筆 · {percentage}%
+                            {door.count} 案例 · {percentage}%
                           </span>
                         </div>
 
@@ -306,7 +315,7 @@ export default async function HomePage() {
                   常見症狀
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  公開案例中的症狀回報次數
+                  曾出現在公開案件中的症狀案例數
                 </p>
 
                 {symptomCounts.length > 0 ? (
@@ -327,7 +336,7 @@ export default async function HomePage() {
                         </div>
 
                         <span className="text-sm font-medium text-gray-500">
-                          {symptom.count} 筆
+                          {symptom.count} 案例
                         </span>
                       </div>
                     ))}
@@ -370,7 +379,7 @@ export default async function HomePage() {
                     return (
                       <Link
                         key={vehicle.id}
-                        href={`/cases/${vehicle.public_case_id}`}
+                        href={`/cases/${vehicle.public_case_id}?from=home`}
                         className="group flex flex-wrap items-center justify-between gap-5 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                       >
                         <div>
@@ -409,6 +418,14 @@ export default async function HomePage() {
                                 </p>
                               </div>
                             </>
+                          )}
+
+                          {isAdmin && (
+                            <AdminOwnerContact
+                              vehicleId={vehicle.id}
+                              emailClickable={false}
+                              className="hidden xl:inline-flex"
+                            />
                           )}
 
                           <span className="text-sm font-medium text-gray-500 transition group-hover:text-gray-950">

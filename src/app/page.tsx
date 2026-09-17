@@ -387,9 +387,18 @@ export default async function HomePage() {
                             {vehicle.public_case_id}
                           </p>
 
-                          <h3 className="mt-1 text-xl font-semibold text-gray-950">
-                            {vehicle.model_year} {vehicle.model}
-                          </h3>
+                          <div className="mt-1 flex flex-wrap items-baseline gap-2">
+                            <h3 className="text-xl font-semibold text-gray-950">
+                              {vehicle.model_year} {vehicle.model}
+                            </h3>
+
+                            <span className="text-xs font-medium text-gray-400">
+                              · {publicIncidents.filter(
+                                (incident) =>
+                                  incident.vehicle_id === vehicle.id
+                              ).length} 次紀錄
+                            </span>
+                          </div>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-x-8 gap-y-3">

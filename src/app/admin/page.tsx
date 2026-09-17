@@ -123,6 +123,15 @@ async function moderateIncident(formData: FormData) {
   if (error) {
     console.error('moderate_incident_atomic error:', error)
 
+    const message = (error.message ?? '').toLowerCase()
+
+    if (
+      message.includes('no longer pending') ||
+      message.includes('only pending')
+    ) {
+      redirect('/admin?error=stale')
+    }
+
     redirect('/admin?error=incident_moderation')
   }
 
@@ -138,7 +147,15 @@ async function moderateIncident(formData: FormData) {
 
 export const dynamic = 'force-dynamic'
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    done?: string
+    error?: string
+  }>
+}) {
+  const query = await searchParams
   const supabase = await createClient()
 
   const {
@@ -276,6 +293,32 @@ export default async function AdminPage() {
   const followupCount = pendingFollowupIncidents.length
   const totalPending = newCaseCount + followupCount
 
+  const doneMessages: Record<string, string> = {
+    approved: '新案件已核准並公開。',
+    needs_revision: '已要求車主修改新案件資料。',
+    rejected: '新案件已拒絕。',
+    incident_approved: '後續紀錄已核准並公開。',
+    incident_needs_revision: '已要求車主修改這筆後續紀錄。',
+    incident_rejected: '後續紀錄已拒絕。',
+  }
+
+  const errorMessages: Record<string, string> = {
+    invalid: '送出的案件審核資料不完整，請重新操作。',
+    invalid_incident: '送出的後續紀錄審核資料不完整，請重新操作。',
+    moderation: '案件審核失敗，請稍後再試。',
+    incident_moderation: '後續紀錄審核失敗，請稍後再試。',
+    stale:
+      '這筆紀錄的狀態已經改變，可能已被車主修改或撤回。頁面已重新載入最新狀態，請確認後再操作。',
+  }
+
+  const doneMessage = query.done
+    ? doneMessages[query.done] ?? null
+    : null
+
+  const actionErrorMessage = query.error
+    ? errorMessages[query.error] ?? null
+    : null
+
   return (
     <main className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-6xl px-6 py-12">
@@ -315,6 +358,18 @@ export default async function AdminPage() {
             </span>
           </div>
         </header>
+
+        {doneMessage && (
+          <div className="mt-8 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-800">
+            {doneMessage}
+          </div>
+        )}
+
+        {actionErrorMessage && (
+          <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+            {actionErrorMessage}
+          </div>
+        )}
 
         {hasError && (
           <div className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">

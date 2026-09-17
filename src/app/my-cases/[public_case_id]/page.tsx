@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import WithdrawIncidentForm from '@/components/WithdrawIncidentForm'
 
 const doorLabels: Record<string, string> = {
   front_left: '左前門',
@@ -123,10 +124,18 @@ async function withdrawPendingIncidentAction(formData: FormData) {
 
 export default async function MyCaseDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ public_case_id: string }>
+  searchParams: Promise<{
+    updated?: string
+    withdrawn?: string
+    resubmitted?: string
+    error?: string
+  }>
 }) {
   const { public_case_id } = await params
+  const query = await searchParams
 
   const supabase = await createClient()
 
@@ -178,7 +187,8 @@ export default async function MyCaseDetailPage({
       has_quote,
       quoted_amount,
       moderation_status,
-      created_at
+      created_at,
+      updated_at
     `)
     .eq('vehicle_id', vehicle.id)
     .order('incident_number', { ascending: true })
@@ -230,6 +240,30 @@ export default async function MyCaseDetailPage({
         >
           ← 回我的案件
         </Link>
+
+        {query.updated === '1' && (
+          <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+            待審紀錄已更新，狀態仍維持「審核中」。
+          </div>
+        )}
+
+        {query.withdrawn === '1' && (
+          <div className="mt-6 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
+            紀錄已撤回，不會進入管理員審核或顯示於公開案例。
+          </div>
+        )}
+
+        {query.resubmitted === '1' && (
+          <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            修改完成，這筆紀錄已重新送交管理員審核。
+          </div>
+        )}
+
+        {query.error === 'withdraw' && (
+          <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            撤回失敗。紀錄可能已被管理員處理，請重新整理後確認狀態。
+          </div>
+        )}
 
         <header className="mt-8 rounded-3xl border border-gray-200 bg-white p-7 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-5">
@@ -396,6 +430,11 @@ export default async function MyCaseDetailPage({
                       這筆新紀錄正在審核中；審核通過前不會顯示在公開案例頁。
                     </p>
 
+                    <p className="mt-1 text-xs text-amber-700">
+                      最後更新：
+                      {new Date(incident.updated_at).toLocaleString('zh-TW')}
+                    </p>
+
                     <div className="mt-4 flex flex-wrap gap-3">
                       <Link
                         href={`/my-cases/${vehicle.public_case_id}/incidents/${incident.id}/edit`}
@@ -404,26 +443,11 @@ export default async function MyCaseDetailPage({
                         修改待審紀錄
                       </Link>
 
-                      <form action={withdrawPendingIncidentAction}>
-                        <input
-                          type="hidden"
-                          name="incident_id"
-                          value={incident.id}
-                        />
-
-                        <input
-                          type="hidden"
-                          name="public_case_id"
-                          value={vehicle.public_case_id}
-                        />
-
-                        <button
-                          type="submit"
-                          className="rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-50"
-                        >
-                          撤回紀錄
-                        </button>
-                      </form>
+                      <WithdrawIncidentForm
+                        action={withdrawPendingIncidentAction}
+                        incidentId={incident.id}
+                        publicCaseId={vehicle.public_case_id}
+                      />
                     </div>
                   </div>
                 )}
@@ -466,6 +490,12 @@ export default async function MyCaseDetailPage({
                       {feedbackByIncident.get(incident.id)?.note ||
                         '這筆紀錄已被管理員拒絕。'}
                     </p>
+
+                    <div className="mt-4 rounded-xl border border-red-200 bg-white/70 px-4 py-3 text-sm leading-6 text-red-800">
+                      此筆紀錄已保留於你的案件歷史，但不會顯示於公開案例。
+                      如果內容需要修正，請新增一筆新的後續紀錄；
+                      已拒絕的原始紀錄不會直接覆寫。
+                    </div>
                   </div>
                 )}
               </article>

@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 
 const doorLabels: Record<string, string> = {
@@ -44,6 +45,7 @@ const moderationLabels: Record<string, string> = {
   approved: '已公開',
   needs_revision: '需要修改',
   rejected: '未通過',
+  withdrawn: '已撤回',
   deleted: '已刪除',
 }
 
@@ -68,6 +70,56 @@ function moderationStyle(status: string) {
 }
 
 export const dynamic = 'force-dynamic'
+
+
+async function withdrawPendingIncidentAction(formData: FormData) {
+  'use server'
+
+  const incidentId = String(formData.get('incident_id') ?? '')
+  const publicCaseId = String(formData.get('public_case_id') ?? '')
+
+  if (!incidentId || !publicCaseId) {
+    redirect('/my-cases')
+  }
+
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
+  const { error } = await supabase.rpc(
+    'withdraw_pending_incident_atomic',
+    {
+      p_incident_id: incidentId,
+    }
+  )
+
+  if (error) {
+    console.error(
+      'withdraw_pending_incident_atomic error:',
+      error
+    )
+
+    redirect(
+      `/my-cases/${publicCaseId}?error=withdraw`
+    )
+  }
+
+  revalidatePath(`/my-cases/${publicCaseId}`)
+  revalidatePath('/admin')
+  revalidatePath('/cases')
+  revalidatePath(`/cases/${publicCaseId}`)
+  revalidatePath('/')
+
+  redirect(
+    `/my-cases/${publicCaseId}?withdrawn=1`
+  )
+}
 
 export default async function MyCaseDetailPage({
   params,
@@ -339,8 +391,46 @@ export default async function MyCaseDetailPage({
                 </div>
 
                 {incident.moderation_status === 'pending' && (
-                  <div className="mt-5 rounded-2xl bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
-                    這筆新紀錄正在審核中；審核通過前不會顯示在公開案例頁。
+                  <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                    <p className="text-sm leading-6 text-amber-800">
+                      這筆新紀錄正在審核中；審核通過前不會顯示在公開案例頁。
+                    </p>
+
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <Link
+                        href={`/my-cases/${vehicle.public_case_id}/incidents/${incident.id}/edit`}
+                        className="inline-flex rounded-xl border border-amber-300 bg-white px-4 py-2.5 text-sm font-medium text-amber-900 hover:bg-amber-100"
+                      >
+                        修改待審紀錄
+                      </Link>
+
+                      <form action={withdrawPendingIncidentAction}>
+                        <input
+                          type="hidden"
+                          name="incident_id"
+                          value={incident.id}
+                        />
+
+                        <input
+                          type="hidden"
+                          name="public_case_id"
+                          value={vehicle.public_case_id}
+                        />
+
+                        <button
+                          type="submit"
+                          className="rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-50"
+                        >
+                          撤回紀錄
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                )}
+
+                {incident.moderation_status === 'withdrawn' && (
+                  <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm leading-6 text-gray-600">
+                    此筆紀錄已由你撤回，不會進入審核或顯示於公開案例。
                   </div>
                 )}
 

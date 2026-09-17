@@ -5,11 +5,12 @@ import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
-async function resubmitIncidentAction(formData: FormData) {
+async function saveIncidentAction(formData: FormData) {
   'use server'
 
   const incidentId = String(formData.get('incident_id') ?? '')
   const publicCaseId = String(formData.get('public_case_id') ?? '')
+  const mode = String(formData.get('mode') ?? '')
 
   const mileage = Number(formData.get('mileage'))
   const incidentDate =
@@ -52,6 +53,7 @@ async function resubmitIncidentAction(formData: FormData) {
   if (
     !incidentId ||
     !publicCaseId ||
+    !['pending', 'needs_revision'].includes(mode) ||
     !Number.isFinite(mileage) ||
     mileage < 0 ||
     doorPositions.length === 0 ||
@@ -72,28 +74,43 @@ async function resubmitIncidentAction(formData: FormData) {
     redirect('/login')
   }
 
-  const { error } = await supabase.rpc(
-    'resubmit_incident_atomic',
-    {
-      p_incident_id: incidentId,
-      p_mileage: mileage,
-      p_incident_date: incidentDate,
-      p_door_positions: doorPositions,
-      p_symptoms: symptoms,
-      p_occurrence_frequency: occurrenceFrequency,
-      p_dealer_visited: dealerVisited,
-      p_has_work_order: hasWorkOrder,
-      p_repair_status: repairStatus,
-      p_has_quote: hasQuote,
-      p_quoted_amount: quotedAmount,
-    }
-  )
+  const rpcArgs = {
+    p_incident_id: incidentId,
+    p_mileage: mileage,
+    p_incident_date: incidentDate,
+    p_door_positions: doorPositions,
+    p_symptoms: symptoms,
+    p_occurrence_frequency: occurrenceFrequency,
+    p_dealer_visited: dealerVisited,
+    p_has_work_order: hasWorkOrder,
+    p_repair_status: repairStatus,
+    p_has_quote: hasQuote,
+    p_quoted_amount: quotedAmount,
+  }
 
-  if (error) {
-    console.error('resubmit_incident_atomic error:', error)
+  const result =
+    mode === 'pending'
+      ? await supabase.rpc(
+          'update_pending_incident_atomic',
+          rpcArgs
+        )
+      : await supabase.rpc(
+          'resubmit_incident_atomic',
+          rpcArgs
+        )
+
+  if (result.error) {
+    console.error(
+      mode === 'pending'
+        ? 'update_pending_incident_atomic error:'
+        : 'resubmit_incident_atomic error:',
+      result.error
+    )
 
     redirect(
-      `/my-cases/${publicCaseId}/incidents/${incidentId}/edit?error=resubmit`
+      `/my-cases/${publicCaseId}/incidents/${incidentId}/edit?error=${
+        mode === 'pending' ? 'update' : 'resubmit'
+      }`
     )
   }
 
@@ -104,7 +121,11 @@ async function resubmitIncidentAction(formData: FormData) {
   revalidatePath('/')
 
   redirect(
-    `/my-cases/${publicCaseId}?resubmitted=1`
+    `/my-cases/${publicCaseId}?${
+      mode === 'pending'
+        ? 'updated=1'
+        : 'resubmitted=1'
+    }`
   )
 }
 
@@ -184,20 +205,28 @@ export default async function EditIncidentPage({
     notFound()
   }
 
-  if (incident.moderation_status !== 'needs_revision') {
+  if (
+    !['pending', 'needs_revision'].includes(
+      incident.moderation_status
+    )
+  ) {
     redirect(`/my-cases/${public_case_id}`)
   }
 
-  const { data: feedbackData } = await supabase.rpc(
-    'get_incident_feedback',
-    {
-      p_incident_id: incident.id,
-    }
-  )
+  let feedback = null
 
-  const feedback = Array.isArray(feedbackData)
-    ? feedbackData[0] ?? null
-    : feedbackData ?? null
+  if (incident.moderation_status === 'needs_revision') {
+    const { data: feedbackData } = await supabase.rpc(
+      'get_incident_feedback',
+      {
+        p_incident_id: incident.id,
+      }
+    )
+
+    feedback = Array.isArray(feedbackData)
+      ? feedbackData[0] ?? null
+      : feedbackData ?? null
+  }
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -216,35 +245,50 @@ export default async function EditIncidentPage({
           </p>
 
           <h1 className="mt-1 text-3xl font-semibold text-gray-950">
-            修改第 {incident.incident_number} 次紀錄
+            {incident.moderation_status === 'pending'
+              ? `修改第 ${incident.incident_number} 次待審紀錄`
+              : `修改第 ${incident.incident_number} 次紀錄`}
           </h1>
 
           <p className="mt-2 text-sm text-gray-600">
-            修改完成後會重新送交管理員審核。
+            {incident.moderation_status === 'pending'
+              ? '儲存後仍會維持審核中狀態。'
+              : '修改完成後會重新送交管理員審核。'}
           </p>
         </header>
 
-        <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
-          <p className="text-sm font-semibold text-amber-900">
-            管理員要求修改
-          </p>
+        {incident.moderation_status === 'needs_revision' && (
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+            <p className="text-sm font-semibold text-amber-900">
+              管理員要求修改
+            </p>
 
-          <p className="mt-2 text-sm leading-6 text-amber-800">
-            {feedback?.note ||
-              '請補充或修正這筆紀錄後重新送審。'}
-          </p>
-        </div>
+            <p className="mt-2 text-sm leading-6 text-amber-800">
+              {feedback?.note ||
+                '請補充或修正這筆紀錄後重新送審。'}
+            </p>
+          </div>
+        )}
+
+        {incident.moderation_status === 'pending' && (
+          <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-sm leading-6 text-blue-800">
+            此筆紀錄尚在審核中。你可以在管理員處理前修改內容；
+            儲存後仍維持「審核中」。
+          </div>
+        )}
 
         {error && (
           <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error === 'invalid'
               ? '請確認必填資料都有正確填寫。'
-              : '重新送審失敗，請稍後再試。'}
+              : error === 'update'
+                ? '儲存待審修改失敗，請稍後再試。'
+                : '重新送審失敗，請稍後再試。'}
           </div>
         )}
 
         <form
-          action={resubmitIncidentAction}
+          action={saveIncidentAction}
           className="mt-6 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm"
         >
           <input
@@ -257,6 +301,12 @@ export default async function EditIncidentPage({
             type="hidden"
             name="public_case_id"
             value={vehicle.public_case_id}
+          />
+
+          <input
+            type="hidden"
+            name="mode"
+            value={incident.moderation_status}
           />
 
           <section>
@@ -488,8 +538,9 @@ export default async function EditIncidentPage({
           </section>
 
           <div className="mt-7 rounded-2xl bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-800">
-            送出後，這筆紀錄會重新變成「審核中」。
-            管理員核准前不會出現在公開案例頁。
+            {incident.moderation_status === 'pending'
+              ? '儲存後仍維持「審核中」；管理員核准前不會出現在公開案例頁。'
+              : '送出後，這筆紀錄會重新變成「審核中」；管理員核准前不會出現在公開案例頁。'}
           </div>
 
           <div className="mt-7 flex justify-end gap-3">
@@ -504,7 +555,9 @@ export default async function EditIncidentPage({
               type="submit"
               className="rounded-xl bg-gray-950 px-6 py-3 text-sm font-medium text-white hover:bg-gray-800"
             >
-              修改並重新送審
+              {incident.moderation_status === 'pending'
+                ? '儲存待審修改'
+                : '修改並重新送審'}
             </button>
           </div>
         </form>

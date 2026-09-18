@@ -92,35 +92,42 @@ export default async function CasesPage({
             moderation_status
           `)
           .in('vehicle_id', vehicleIds)
-          .order('incident_number', { ascending: true })
+          .order('incident_number', { ascending: false })
       : { data: [], error: null }
 
   const publicCases = vehicles ?? []
   const publicIncidents = incidents ?? []
 
-  const reportingEntries = await Promise.all(
-    publicCases.map(async (vehicle) => {
-      const { data } = await supabase.rpc(
-        'get_public_case_report_channels',
-        {
-          p_vehicle_id: vehicle.id,
-        }
-      )
+  const {
+    data: reportingRows,
+    error: reportingError,
+  } =
+    vehicleIds.length > 0
+      ? await supabase.rpc(
+          'get_public_case_report_channels_batch',
+          {
+            p_vehicle_ids: vehicleIds,
+          }
+        )
+      : { data: [], error: null }
 
-      return [
-        vehicle.id,
-        new Set(
-          (data ?? []).map(
-            (item: { channel: string }) => item.channel
-          )
-        ).size,
-      ] as const
-    })
-  )
+  const reportingCountMap = new Map<
+    string,
+    number
+  >()
 
-  const reportingCountMap = new Map(reportingEntries)
+  for (const row of reportingRows ?? []) {
+    reportingCountMap.set(
+      row.vehicle_id,
+      (reportingCountMap.get(
+        row.vehicle_id
+      ) ?? 0) + 1
+    )
+  }
 
-  const reportingCountForVehicle = (vehicleId: string) =>
+  const reportingCountForVehicle = (
+    vehicleId: string
+  ) =>
     reportingCountMap.get(vehicleId) ?? 0
 
   const modelOptions = [...new Set(publicCases.map((item) => item.model))]
@@ -141,17 +148,11 @@ export default async function CasesPage({
   const latestIncidentForVehicle = (vehicleId: string) => {
     const list = incidentsForVehicle(vehicleId)
 
-    return [...list].sort((a, b) => {
-      const aDate = a.incident_date
-        ? new Date(a.incident_date).getTime()
-        : 0
-
-      const bDate = b.incident_date
-        ? new Date(b.incident_date).getTime()
-        : 0
-
-      return bDate - aDate
-    })[0]
+    return [...list].sort(
+      (a, b) =>
+        Number(b.incident_number ?? 0) -
+        Number(a.incident_number ?? 0)
+    )[0]
   }
 
   let filteredCases = publicCases.filter((vehicle) => {
@@ -192,25 +193,24 @@ export default async function CasesPage({
 
   filteredCases = [...filteredCases].sort((a, b) => {
     if (sort === 'incident_newest') {
-      const aIncident = latestIncidentForVehicle(a.id)
-      const bIncident = latestIncidentForVehicle(b.id)
+      const latestDate = (vehicleId: string) =>
+        Math.max(
+          0,
+          ...incidentsForVehicle(vehicleId).map((incident) =>
+            incident.incident_date
+              ? new Date(incident.incident_date).getTime()
+              : 0
+          )
+        )
 
-      const aDate = aIncident?.incident_date
-        ? new Date(aIncident.incident_date).getTime()
-        : 0
-
-      const bDate = bIncident?.incident_date
-        ? new Date(bIncident.incident_date).getTime()
-        : 0
-
-      return bDate - aDate
+      return latestDate(b.id) - latestDate(a.id)
     }
 
     if (sort === 'mileage_asc' || sort === 'mileage_desc') {
       const aMileage =
-        incidentsForVehicle(a.id)[0]?.mileage ?? 0
+        latestIncidentForVehicle(a.id)?.mileage ?? 0
       const bMileage =
-        incidentsForVehicle(b.id)[0]?.mileage ?? 0
+        latestIncidentForVehicle(b.id)?.mileage ?? 0
 
       return sort === 'mileage_asc'
         ? aMileage - bMileage
@@ -228,7 +228,10 @@ export default async function CasesPage({
     return bPublished - aPublished
   })
 
-  const hasError = vehicleError || incidentError
+  const hasError =
+    vehicleError ||
+    incidentError ||
+    reportingError
 
   const hasFilters =
     Boolean(q) ||
@@ -640,7 +643,9 @@ export default async function CasesPage({
         {hasError && (
           <div className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
             公開案例讀取失敗：
-            {vehicleError?.message ?? incidentError?.message}
+            {vehicleError?.message ??
+              incidentError?.message ??
+              reportingError?.message}
           </div>
         )}
 
@@ -669,8 +674,8 @@ export default async function CasesPage({
               const vehicleIncidents =
                 incidentsForVehicle(vehicle.id)
 
-              const representativeIncident =
-                vehicleIncidents.find((incident) => {
+              const matchingIncidents =
+                vehicleIncidents.filter((incident) => {
                   const matchesDoor =
                     !door ||
                     incident.door_positions?.includes(door)
@@ -680,7 +685,15 @@ export default async function CasesPage({
                     incident.symptoms?.includes(symptom)
 
                   return matchesDoor && matchesSymptom
-                }) ?? vehicleIncidents[0]
+                })
+
+              const representativeIncident =
+                [...matchingIncidents].sort(
+                  (a, b) =>
+                    Number(b.incident_number ?? 0) -
+                    Number(a.incident_number ?? 0)
+                )[0] ??
+                latestIncidentForVehicle(vehicle.id)
 
               return (
                 <Link

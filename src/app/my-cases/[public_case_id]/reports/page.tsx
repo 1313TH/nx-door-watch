@@ -24,8 +24,8 @@ const channels = [
   },
   {
     value: '1950',
-    label: '1950 消費者服務專線',
-    description: '透過 1950 諮詢或反映消費爭議',
+    label: '1950 消費者諮詢專線',
+    description: '透過 1950 諮詢消費爭議與後續處理方向',
     href: 'https://cpc.ey.gov.tw/Page/1DCF8AA4D223F601/ebc630d6-b774-4db5-abdc-5b52ed0963cc',
   },
   {

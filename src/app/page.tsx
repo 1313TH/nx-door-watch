@@ -91,8 +91,17 @@ export default async function HomePage() {
     ...doorCounts.map((door) => door.count)
   )
 
-  const topDoor =
-    [...doorCounts].sort((a, b) => b.count - a.count)[0] ?? null
+  const topDoorCount = Math.max(
+    0,
+    ...doorCounts.map((door) => door.count)
+  )
+
+  const topDoorLabels =
+    topDoorCount > 0
+      ? doorCounts
+          .filter((door) => door.count === topDoorCount)
+          .map((door) => door.label)
+      : []
 
   const symptomCounts = Object.entries(symptomLabels)
     .map(([key, label]) => ({
@@ -111,40 +120,34 @@ export default async function HomePage() {
 
   const latestCases = publicCases.slice(0, 5)
 
-  const latestCaseReportEntries = await Promise.all(
-    latestCases.map(async (vehicle) => {
-      const { data, error } = await publicSupabase.rpc(
-        'get_public_case_report_channels',
-        {
-          p_vehicle_id: vehicle.id,
-        }
-      )
+  const latestVehicleIds =
+    latestCases.map((vehicle) => vehicle.id)
 
-      if (error) {
-        console.error(
-          'get_public_case_report_channels error:',
-          error
+  const {
+    data: latestReportRows,
+    error: latestReportError,
+  } =
+    latestVehicleIds.length > 0
+      ? await publicSupabase.rpc(
+          'get_public_case_report_channels_batch',
+          {
+            p_vehicle_ids: latestVehicleIds,
+          }
         )
+      : { data: [], error: null }
 
-        return [vehicle.id, [] as string[]] as const
-      }
+  const latestCaseReportMap =
+    new Map<string, string[]>()
 
-      const channels: string[] = Array.from(
-        new Set<string>(
-          ((data ?? []) as { channel: string }[]).map(
-            (item) => String(item.channel)
-          )
-        )
-      )
+  for (const row of latestReportRows ?? []) {
+    const current =
+      latestCaseReportMap.get(row.vehicle_id) ?? []
 
-      return [vehicle.id, channels] as const
-    })
-  )
-
-  const latestCaseReportMap = new Map<
-    string,
-    string[]
-  >(latestCaseReportEntries)
+    latestCaseReportMap.set(
+      row.vehicle_id,
+      [...current, row.channel]
+    )
+  }
 
   const {
     data: reportingSummaryRows,
@@ -184,7 +187,7 @@ export default async function HomePage() {
     lexus: 'Lexus 原廠／客服',
     vehicle_safety: '車輛安全瑕疵通報',
     consumer_protection: '消費者保護線上申訴',
-    '1950': '1950 消費者服務專線',
+    '1950': '1950 消費者諮詢專線',
     motc_mailbox: '交通部部長／民意信箱',
   }
 
@@ -194,7 +197,8 @@ export default async function HomePage() {
     vehicleError ||
     incidentError ||
     reportingSummaryError ||
-    reportingChannelError
+    reportingChannelError ||
+    latestReportError
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -279,7 +283,11 @@ export default async function HomePage() {
               </Link>
 
               <Link
-                href={user ? '/my-cases/new' : '/login'}
+                href={
+                  user
+                    ? '/my-cases/new'
+                    : '/login?next=%2Fmy-cases%2Fnew'
+                }
                 className="rounded-xl border border-gray-300 bg-white px-5 py-3 text-sm font-medium text-gray-800 transition hover:bg-gray-100"
               >
                 回報我的案例
@@ -322,8 +330,8 @@ export default async function HomePage() {
 
               <div className="rounded-2xl bg-gray-50 p-5">
                 <p className="text-xl font-semibold text-gray-950">
-                  {topDoor && topDoor.count > 0
-                    ? topDoor.label
+                  {topDoorLabels.length > 0
+                    ? topDoorLabels.join('、')
                     : '—'}
                 </p>
                 <p className="mt-1 text-sm text-gray-500">
@@ -720,7 +728,7 @@ export default async function HomePage() {
               },
               {
                 channel: '1950',
-                title: '1950 消費者服務專線',
+                title: '1950 消費者諮詢專線',
                 description:
                   '不確定該走哪個流程時，可先透過 1950 詢問處理方向。',
                 href:

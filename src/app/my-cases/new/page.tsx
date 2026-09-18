@@ -54,40 +54,6 @@ async function createCase(formData: FormData) {
     redirect('/my-cases/new?error=missing_issue')
   }
 
-  const { data: createdCase, error: createError } = await supabase.rpc(
-    'create_case_atomic',
-    {
-      p_model: model,
-      p_model_year: modelYear,
-      p_mileage: mileage,
-      p_incident_date: incidentDate,
-      p_door_positions: doorPositions,
-      p_symptoms: symptoms,
-      p_occurrence_frequency: occurrenceFrequency,
-      p_dealer_visited: dealerVisited,
-      p_has_work_order: hasWorkOrder,
-      p_repair_status: repairStatus,
-      p_has_quote: hasQuote,
-      p_quoted_amount: hasQuote ? quotedAmount : null,
-    }
-  )
-
-  if (createError) {
-    console.error('create_case_atomic error:', createError)
-
-    redirect(
-      `/my-cases/new?error=create&detail=${encodeURIComponent(
-        createError.message ?? 'Unknown error'
-      )}`
-    )
-  }
-
-  const vehicleId = createdCase?.[0]?.vehicle_id
-
-  if (!vehicleId) {
-    redirect('/my-cases/new?error=create')
-  }
-
   const reportingChannels = [
     'lexus',
     'vehicle_safety',
@@ -96,36 +62,66 @@ async function createCase(formData: FormData) {
     'motc_mailbox',
   ]
 
-  for (const channel of reportingChannels) {
-    const status = String(
-      formData.get(`report_${channel}`) ?? ''
-    )
+  const reports = reportingChannels.flatMap(
+    (channel) => {
+      const status = String(
+        formData.get(`report_${channel}`) ?? ''
+      )
 
-    if (status !== 'submitted') {
-      continue
+      if (status !== 'submitted') {
+        return []
+      }
+
+      const reportedAt =
+        String(
+          formData.get(
+            `report_date_${channel}`
+          ) ?? ''
+        ).trim() || null
+
+      return [
+        {
+          channel,
+          reported_at: reportedAt,
+        },
+      ]
     }
+  )
 
-    const { error: reportError } = await supabase.rpc(
-      'upsert_case_report',
+  const { data: createdCase, error: createError } =
+    await supabase.rpc(
+      'create_case_with_reports_atomic',
       {
-        p_vehicle_id: vehicleId,
-        p_channel: channel,
-        p_status: status,
-        p_reported_at:
-          status === 'submitted'
-            ? new Date().toISOString().slice(0, 10)
-            : null,
-        p_reference_number: null,
-        p_note: null,
+        p_model: model,
+        p_model_year: modelYear,
+        p_mileage: mileage,
+        p_incident_date: incidentDate,
+        p_door_positions: doorPositions,
+        p_symptoms: symptoms,
+        p_occurrence_frequency:
+          occurrenceFrequency,
+        p_dealer_visited: dealerVisited,
+        p_has_work_order: hasWorkOrder,
+        p_repair_status: repairStatus,
+        p_has_quote: hasQuote,
+        p_quoted_amount: hasQuote
+          ? quotedAmount
+          : null,
+        p_reports: reports,
       }
     )
 
-    if (reportError) {
-      console.error(
-        `upsert_case_report ${channel} error:`,
-        reportError
-      )
-    }
+  if (createError) {
+    console.error(
+      'create_case_with_reports_atomic error:',
+      createError
+    )
+
+    redirect('/my-cases/new?error=create')
+  }
+
+  if (!createdCase?.[0]?.vehicle_id) {
+    redirect('/my-cases/new?error=create')
   }
 
   redirect('/my-cases?created=1')
@@ -136,7 +132,6 @@ export default async function NewCasePage({
 }: {
   searchParams: Promise<{
     error?: string
-    detail?: string
   }>
 }) {
   const params = await searchParams
@@ -192,11 +187,6 @@ export default async function NewCasePage({
               {errorMessage}
             </p>
 
-            {params.detail && (
-              <p className="mt-2 break-words text-xs">
-                {params.detail}
-              </p>
-            )}
           </div>
         )}
 
@@ -437,8 +427,8 @@ export default async function NewCasePage({
                 },
                 {
                   value: '1950',
-                  label: '1950 消費者服務專線',
-                  description: '查看官方說明；1950 可轉接所在地消費者服務中心',
+                  label: '1950 消費者諮詢專線',
+                  description: '消費諮詢管道，可轉接所在地消費者服務中心；不列入正式申訴率',
                   href: 'https://cpc.ey.gov.tw/Page/1DCF8AA4D223F601/ebc630d6-b774-4db5-abdc-5b52ed0963cc',
                 },
                 {
@@ -476,19 +466,32 @@ export default async function NewCasePage({
                       </p>
                     </div>
 
-                    <select
-                      name={`report_${item.value}`}
-                      defaultValue=""
-                      className="mt-3 rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-800 sm:mt-0"
-                    >
-                      <option value="">
-                        尚未反映
-                      </option>
+                    <div className="mt-3 grid gap-2 sm:mt-0 sm:min-w-44">
+                      <select
+                        name={`report_${item.value}`}
+                        defaultValue=""
+                        className="rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-800"
+                      >
+                        <option value="">
+                          {item.value === '1950'
+                            ? '尚未諮詢'
+                            : '尚未反映'}
+                        </option>
 
-                      <option value="submitted">
-                        已正式反映
-                      </option>
-                    </select>
+                        <option value="submitted">
+                          {item.value === '1950'
+                            ? '已完成諮詢'
+                            : '已正式反映'}
+                        </option>
+                      </select>
+
+                      <input
+                        type="date"
+                        name={`report_date_${item.value}`}
+                        aria-label={`${item.label}日期`}
+                        className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-xs text-gray-700"
+                      />
+                    </div>
                   </div>
                 </div>
               ))}
@@ -496,8 +499,8 @@ export default async function NewCasePage({
 
             <div className="mt-4 rounded-2xl bg-blue-50 p-4 text-sm leading-6 text-blue-900">
               點擊上方管道名稱可直接前往官方頁面。
-              完成申訴或通報後，再將狀態改為「已正式反映」，
-              才會加入平台的公開統計數據。
+              正式申訴或通報完成後可標記為「已正式反映」。
+              1950 為消費諮詢管道，會保存紀錄，但不計入正式反映率。
             </div>
           </section>
 

@@ -5,6 +5,43 @@ import { createClient } from '@/lib/supabase/server'
 import AdminOwnerContact from '@/components/admin/AdminOwnerContact'
 import AdminCaseReports from '@/components/admin/AdminCaseReports'
 
+const doorLabels: Record<string, string> = {
+  front_left: '左前門',
+  front_right: '右前門',
+  rear_left: '左後門',
+  rear_right: '右後門',
+}
+
+const symptomLabels: Record<string, string> = {
+  cannot_open: '車門無法開啟',
+  intermittent: '偶發無法開啟',
+  delay: '開門反應延遲',
+  warning: '出現警告訊息',
+  abnormal_sound: '異常聲響',
+  other: '其他',
+}
+
+const frequencyLabels: Record<string, string> = {
+  first_time: '首次發生',
+  two_to_three: '已發生 2～3 次',
+  repeated: '反覆發生',
+}
+
+const repairLabels: Record<string, string> = {
+  not_visited: '尚未回廠',
+  waiting_inspection: '等待檢查',
+  observe: '持續觀察',
+  no_fault_code: '查無故障碼',
+  waiting_parts: '等待零件',
+  parts_arrived: '零件已到',
+  repair_scheduled: '已排定維修',
+  repaired_warranty: '保固維修完成',
+  repaired_goodwill: '專案／善意維修完成',
+  repaired_self_paid: '自費維修完成',
+  completed: '已完成／結案',
+  other: '其他',
+}
+
 async function requireAdmin() {
   const supabase = await createClient()
 
@@ -260,6 +297,46 @@ export default async function AdminRequestsPage({
     )
   )
 
+  const revisionVehicleIds = [
+    ...new Set(
+      (revisions ?? []).map(
+        (revision) => revision.vehicle_id
+      )
+    ),
+  ]
+
+  const {
+    data: currentIncidents,
+    error: currentIncidentError,
+  } =
+    revisionVehicleIds.length > 0
+      ? await supabase
+          .from('incidents')
+          .select(`
+            id,
+            vehicle_id,
+            incident_number,
+            mileage,
+            incident_date,
+            door_positions,
+            symptoms,
+            occurrence_frequency,
+            dealer_visited,
+            has_work_order,
+            repair_status,
+            has_quote,
+            quoted_amount
+          `)
+          .in('vehicle_id', revisionVehicleIds)
+          .eq('incident_number', 1)
+      : { data: [], error: null }
+
+  const currentIncidentMap = new Map(
+    (currentIncidents ?? []).map(
+      (incident) => [incident.vehicle_id, incident]
+    )
+  )
+
   const {
     data: archivedVehicles,
     error: archivedError,
@@ -283,6 +360,7 @@ export default async function AdminRequestsPage({
     revisionError ||
     archiveError ||
     vehicleError ||
+    currentIncidentError ||
     archivedError
 
   const doneMessages: Record<string, string> = {
@@ -365,6 +443,12 @@ export default async function AdminRequestsPage({
                 </p>
               )}
 
+              {currentIncidentError && (
+                <p>
+                  current incidents：{currentIncidentError.message}
+                </p>
+              )}
+
               {archivedError && (
                 <p>
                   archived vehicles：{archivedError.message}
@@ -403,6 +487,213 @@ export default async function AdminRequestsPage({
                     unknown
                   >
 
+                const currentIncident =
+                  currentIncidentMap.get(
+                    revision.vehicle_id
+                  )
+
+                const formatList = (
+                  value: unknown,
+                  labels: Record<string, string>
+                ) => {
+                  if (!Array.isArray(value)) return '—'
+
+                  return value
+                    .map((item) =>
+                      labels[String(item)] ??
+                      String(item)
+                    )
+                    .join('、') || '—'
+                }
+
+                const formatBoolean = (
+                  value: unknown
+                ) =>
+                  value === true
+                    ? '是'
+                    : value === false
+                      ? '否'
+                      : '—'
+
+                const diffRows = [
+                  {
+                    label: '車型',
+                    before: vehicle?.model ?? '—',
+                    after: String(
+                      proposed.model ??
+                        vehicle?.model ??
+                        '—'
+                    ),
+                  },
+                  {
+                    label: '年式',
+                    before: String(
+                      vehicle?.model_year ?? '—'
+                    ),
+                    after: String(
+                      proposed.model_year ??
+                        vehicle?.model_year ??
+                        '—'
+                    ),
+                  },
+                  {
+                    label: '里程',
+                    before:
+                      currentIncident?.mileage != null
+                        ? `${Number(
+                            currentIncident.mileage
+                          ).toLocaleString()} km`
+                        : '—',
+                    after:
+                      proposed.mileage != null
+                        ? `${Number(
+                            proposed.mileage
+                          ).toLocaleString()} km`
+                        : currentIncident?.mileage != null
+                          ? `${Number(
+                              currentIncident.mileage
+                            ).toLocaleString()} km`
+                          : '—',
+                  },
+                  {
+                    label: '發生日期',
+                    before:
+                      currentIncident?.incident_date ??
+                      '—',
+                    after: String(
+                      proposed.incident_date ??
+                        currentIncident?.incident_date ??
+                        '—'
+                    ),
+                  },
+                  {
+                    label: '問題位置',
+                    before: formatList(
+                      currentIncident?.door_positions,
+                      doorLabels
+                    ),
+                    after: formatList(
+                      proposed.door_positions ??
+                        currentIncident?.door_positions,
+                      doorLabels
+                    ),
+                  },
+                  {
+                    label: '症狀',
+                    before: formatList(
+                      currentIncident?.symptoms,
+                      symptomLabels
+                    ),
+                    after: formatList(
+                      proposed.symptoms ??
+                        currentIncident?.symptoms,
+                      symptomLabels
+                    ),
+                  },
+                  {
+                    label: '發生頻率',
+                    before:
+                      currentIncident?.occurrence_frequency
+                        ? frequencyLabels[
+                            currentIncident
+                              .occurrence_frequency
+                          ] ??
+                          currentIncident
+                            .occurrence_frequency
+                        : '—',
+                    after: (() => {
+                      const value =
+                        proposed.occurrence_frequency ??
+                        currentIncident
+                          ?.occurrence_frequency
+
+                      return value
+                        ? frequencyLabels[
+                            String(value)
+                          ] ?? String(value)
+                        : '—'
+                    })(),
+                  },
+                  {
+                    label: 'Lexus 回廠',
+                    before: formatBoolean(
+                      currentIncident?.dealer_visited
+                    ),
+                    after: formatBoolean(
+                      proposed.dealer_visited ??
+                        currentIncident?.dealer_visited
+                    ),
+                  },
+                  {
+                    label: '維修工單',
+                    before: formatBoolean(
+                      currentIncident?.has_work_order
+                    ),
+                    after: formatBoolean(
+                      proposed.has_work_order ??
+                        currentIncident?.has_work_order
+                    ),
+                  },
+                  {
+                    label: '維修狀態',
+                    before:
+                      currentIncident?.repair_status
+                        ? repairLabels[
+                            currentIncident.repair_status
+                          ] ??
+                          currentIncident.repair_status
+                        : '—',
+                    after: (() => {
+                      const value =
+                        proposed.repair_status ??
+                        currentIncident?.repair_status
+
+                      return value
+                        ? repairLabels[
+                            String(value)
+                          ] ?? String(value)
+                        : '—'
+                    })(),
+                  },
+                  {
+                    label: '是否有報價',
+                    before: formatBoolean(
+                      currentIncident?.has_quote
+                    ),
+                    after: formatBoolean(
+                      proposed.has_quote ??
+                        currentIncident?.has_quote
+                    ),
+                  },
+                  {
+                    label: '報價金額',
+                    before:
+                      currentIncident
+                        ?.quoted_amount != null
+                        ? `NT$ ${Number(
+                            currentIncident
+                              .quoted_amount
+                          ).toLocaleString()}`
+                        : '—',
+                    after:
+                      proposed.quoted_amount != null
+                        ? `NT$ ${Number(
+                            proposed.quoted_amount
+                          ).toLocaleString()}`
+                        : currentIncident
+                            ?.quoted_amount != null
+                          ? `NT$ ${Number(
+                              currentIncident
+                                .quoted_amount
+                            ).toLocaleString()}`
+                          : '—',
+                  },
+                ].filter(
+                  (row) =>
+                    String(row.before) !==
+                    String(row.after)
+                )
+
                 return (
                   <article
                     key={revision.id}
@@ -440,65 +731,55 @@ export default async function AdminRequestsPage({
                       </span>
                     </div>
 
-                    <div className="mt-5 grid gap-4 rounded-2xl bg-gray-50 p-5 sm:grid-cols-2 lg:grid-cols-3">
-                      <div>
-                        <p className="text-xs text-gray-500">
-                          新車型
+                    <div className="mt-5 rounded-2xl bg-gray-50 p-5">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-gray-900">
+                          修改內容
                         </p>
-                        <p className="mt-1 font-medium">
-                          {String(
-                            proposed.model ?? '-'
-                          )}
-                        </p>
+
+                        {vehicle && (
+                          <Link
+                            href={`/cases/${vehicle.public_case_id}?from=cases`}
+                            target="_blank"
+                            className="text-xs font-medium text-blue-700 hover:underline"
+                          >
+                            查看完整案件 ↗
+                          </Link>
+                        )}
                       </div>
 
-                      <div>
-                        <p className="text-xs text-gray-500">
-                          新年式
-                        </p>
-                        <p className="mt-1 font-medium">
-                          {String(
-                            proposed.model_year ??
-                              '-'
-                          )}
-                        </p>
-                      </div>
+                      {diffRows.length > 0 ? (
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          {diffRows.map((row) => (
+                            <div
+                              key={row.label}
+                              className="rounded-xl border border-gray-200 bg-white p-4"
+                            >
+                              <p className="text-xs font-medium text-gray-500">
+                                {row.label}
+                              </p>
 
-                      <div>
-                        <p className="text-xs text-gray-500">
-                          里程
-                        </p>
-                        <p className="mt-1 font-medium">
-                          {String(
-                            proposed.mileage ?? '-'
-                          )}{' '}
-                          km
-                        </p>
-                      </div>
+                              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                                <span className="text-gray-500 line-through decoration-gray-300">
+                                  {row.before}
+                                </span>
 
-                      <div>
-                        <p className="text-xs text-gray-500">
-                          發生日期
-                        </p>
-                        <p className="mt-1 font-medium">
-                          {String(
-                            proposed.incident_date ??
-                              '-'
-                          )}
-                        </p>
-                      </div>
+                                <span className="text-gray-300">
+                                  →
+                                </span>
 
-                      <div>
-                        <p className="text-xs text-gray-500">
-                          維修狀態
+                                <span className="font-semibold text-gray-950">
+                                  {row.after}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-4 text-sm text-gray-500">
+                          此申請沒有偵測到資料差異。
                         </p>
-                        <p className="mt-1 font-medium">
-                          {String(
-                            proposed.repair_status ??
-                              '-'
-                          )}
-                        </p>
-                      </div>
+                      )}
                     </div>
 
                     <form
@@ -587,6 +868,18 @@ export default async function AdminRequestsPage({
                       {vehicle?.model_year}{' '}
                       {vehicle?.model}
                     </h3>
+
+                    {vehicle && (
+                      <div className="mt-2">
+                        <Link
+                          href={`/cases/${vehicle.public_case_id}?from=cases`}
+                          target="_blank"
+                          className="text-xs font-medium text-blue-700 hover:underline"
+                        >
+                          查看完整案件 ↗
+                        </Link>
+                      </div>
+                    )}
 
                     {vehicle && (
                       <>

@@ -43,7 +43,7 @@ const channels = [
   },
   {
     key: '1950',
-    title: '1950 消費者服務專線',
+    title: '1950 消費者諮詢專線',
     description:
       '如果還不確定該走哪個申訴程序，可以先撥打 1950 諮詢，系統會轉接所在地縣市政府消費者服務中心。',
     href: 'https://cpc.ey.gov.tw/Page/1DCF8AA4D223F601/ebc630d6-b774-4db5-abdc-5b52ed0963cc',

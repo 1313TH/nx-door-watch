@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 function getStatusLabel(status: string) {
   switch (status) {
     case 'approved':
-      return '已公開'
+      return '✓ 已完成審核'
     case 'needs_revision':
       return '需修改'
     case 'rejected':
@@ -178,7 +178,7 @@ export default async function MyCasesPage() {
 
                       {reportedChannelCountForVehicle(vehicle.id) > 0 && (
                         <span>
-                          已正式反映{' '}
+                          ✓ 已正式反映{' '}
                           {reportedChannelCountForVehicle(vehicle.id)} 個管道
                         </span>
                       )}

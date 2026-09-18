@@ -646,7 +646,7 @@ export default async function HomePage() {
                                   key={channel}
                                   className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700"
                                 >
-                                  {reportChannelLabels[channel] ?? channel}
+                                  ✓ {reportChannelLabels[channel] ?? channel}
                                 </span>
                               ))}
 

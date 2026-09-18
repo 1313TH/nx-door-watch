@@ -719,7 +719,7 @@ export default async function CasesPage({
 
                       {reportingCountForVehicle(vehicle.id) > 0 && (
                         <p className="mt-2 text-xs font-medium text-blue-700">
-                          已正式反映{' '}
+                          ✓ 已正式反映{' '}
                           {reportingCountForVehicle(vehicle.id)} 個管道
                         </p>
                       )}
@@ -733,7 +733,7 @@ export default async function CasesPage({
                       }
                     >
                       {vehicle.moderation_status === 'approved'
-                        ? '已完成審核'
+                        ? '✓ 已完成審核'
                         : '公開中・待後審'}
                     </span>
                   </div>

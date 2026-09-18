@@ -51,7 +51,7 @@ const reportChannelLabels: Record<string, string> = {
 
 const moderationLabels: Record<string, string> = {
   pending: '已公開・待審',
-  approved: '已完成審核',
+  approved: '✓ 已完成審核',
   needs_revision: '需要修改',
   rejected: '未通過',
   withdrawn: '已撤回',

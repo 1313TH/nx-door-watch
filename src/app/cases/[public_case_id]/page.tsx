@@ -155,7 +155,7 @@ export default async function CaseDetailPage({
 
             <span className="rounded-full bg-green-50 px-3 py-1 text-sm font-medium text-green-700">
               {vehicle.moderation_status === 'approved'
-                ? '已完成審核'
+                ? '✓ 已完成審核'
                 : '公開中・待後審'}
             </span>
           </div>

@@ -36,6 +36,7 @@ export default async function MyCasesPage() {
       model,
       model_year,
       moderation_status,
+      is_primary,
       created_at,
       updated_at
     `)
@@ -43,6 +44,50 @@ export default async function MyCasesPage() {
     .is('deleted_at', null)
     .is('archived_at', null)
     .order('created_at', { ascending: false })
+
+  const vehicleIds = vehicles?.map((vehicle) => vehicle.id) ?? []
+
+  const { data: incidents } =
+    vehicleIds.length > 0
+      ? await supabase
+          .from('incidents')
+          .select('vehicle_id')
+          .in('vehicle_id', vehicleIds)
+          .neq('moderation_status', 'deleted')
+      : { data: [] }
+
+  const { data: caseReports } =
+    vehicleIds.length > 0
+      ? await supabase
+          .from('case_reports')
+          .select('vehicle_id, channel, status')
+          .in('vehicle_id', vehicleIds)
+          .in('status', ['submitted', 'completed'])
+      : { data: [] }
+
+  const incidentCountForVehicle = (vehicleId: string) =>
+    (incidents ?? []).filter(
+      (incident) => incident.vehicle_id === vehicleId
+    ).length
+
+  const reportedChannelCountForVehicle = (vehicleId: string) =>
+    new Set(
+      (caseReports ?? [])
+        .filter(
+          (report) => report.vehicle_id === vehicleId
+        )
+        .map((report) => report.channel)
+    ).size
+
+  const sortedVehicles = [...(vehicles ?? [])].sort((a, b) => {
+    if (a.is_primary && !b.is_primary) return -1
+    if (!a.is_primary && b.is_primary) return 1
+
+    return (
+      new Date(b.created_at).getTime() -
+      new Date(a.created_at).getTime()
+    )
+  })
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -69,7 +114,7 @@ export default async function MyCasesPage() {
             href="/my-cases/new"
             className="rounded-xl bg-gray-950 px-5 py-3 font-medium text-white hover:bg-gray-800"
           >
-            ＋ 建立案例
+            ＋ 新增另一台車
           </Link>
         </div>
 
@@ -101,7 +146,7 @@ export default async function MyCasesPage() {
 
         {!error && vehicles && vehicles.length > 0 && (
           <div className="mt-10 grid gap-4">
-            {vehicles.map((vehicle) => (
+            {sortedVehicles.map((vehicle) => (
               <article
                 key={vehicle.id}
                 className="rounded-2xl bg-white p-6 shadow-sm"
@@ -112,14 +157,35 @@ export default async function MyCasesPage() {
                       {vehicle.public_case_id}
                     </p>
 
-                    <h2 className="mt-1 text-xl font-semibold text-gray-950">
-                      {vehicle.model_year} {vehicle.model}
-                    </h2>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <h2 className="text-xl font-semibold text-gray-950">
+                        {vehicle.model_year} {vehicle.model}
+                      </h2>
 
-                    <p className="mt-3 text-sm text-gray-500">
-                      建立日期：
-                      {new Date(vehicle.created_at).toLocaleDateString('zh-TW')}
-                    </p>
+                      {vehicle.is_primary && (
+                        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                          主要車輛
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
+                      <span>
+                        {incidentCountForVehicle(vehicle.id)} 次紀錄
+                      </span>
+
+                      {reportedChannelCountForVehicle(vehicle.id) > 0 && (
+                        <span>
+                          已正式反映{' '}
+                          {reportedChannelCountForVehicle(vehicle.id)} 個管道
+                        </span>
+                      )}
+
+                      <span>
+                        建立日期：
+                        {new Date(vehicle.created_at).toLocaleDateString('zh-TW')}
+                      </span>
+                    </div>
                   </div>
 
                   <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
@@ -155,6 +221,15 @@ export default async function MyCasesPage() {
                         申請下架
                       </Link>
                     </>
+                  )}
+
+                  {vehicle.moderation_status === 'approved' && (
+                    <Link
+                      href={`/my-cases/${vehicle.public_case_id}/new-incident`}
+                      className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                    >
+                      ＋ 新增紀錄
+                    </Link>
                   )}
 
                   <Link

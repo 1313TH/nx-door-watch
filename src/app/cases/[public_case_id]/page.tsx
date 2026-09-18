@@ -24,6 +24,14 @@ const frequencyLabels: Record<string, string> = {
   repeated: '反覆發生',
 }
 
+const reportChannelLabels: Record<string, string> = {
+  lexus: 'Lexus 原廠／客服',
+  vehicle_safety: '車輛安全瑕疵通報',
+  consumer_protection: '消費者保護線上申訴',
+  '1950': '1950 消費者服務專線',
+  motc_mailbox: '交通部部長／民意信箱',
+}
+
 const repairLabels: Record<string, string> = {
   not_visited: '尚未回廠',
   waiting_inspection: '等待檢查',
@@ -95,11 +103,26 @@ export default async function CaseDetailPage({
       moderation_status
     `)
     .eq('vehicle_id', vehicle.id)
-    .order('incident_number', { ascending: true })
+    .order('incident_number', { ascending: false })
 
   if (incidentError) {
     throw new Error(incidentError.message)
   }
+
+  const { data: reportChannels } = await supabase.rpc(
+    'get_public_case_report_channels',
+    {
+      p_vehicle_id: vehicle.id,
+    }
+  )
+
+  const uniqueReportChannels: string[] = Array.from(
+    new Set<string>(
+      ((reportChannels ?? []) as { channel: string }[]).map(
+        (item) => String(item.channel)
+      )
+    )
+  )
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -140,6 +163,37 @@ export default async function CaseDetailPage({
           </div>
         </header>
 
+        {uniqueReportChannels.length > 0 && (
+          <section className="mt-6 rounded-3xl border border-blue-100 bg-blue-50/60 p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="font-semibold text-gray-950">
+                  正式反映紀錄
+                </h2>
+
+                <p className="mt-1 text-sm text-gray-600">
+                  此車主已透過以下正式管道反映本案。
+                </p>
+              </div>
+
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-blue-700">
+                {uniqueReportChannels.length} 個管道
+              </span>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {uniqueReportChannels.map((channel) => (
+                <span
+                  key={channel}
+                  className="rounded-full border border-blue-200 bg-white px-3 py-1.5 text-sm font-medium text-blue-800"
+                >
+                  ✓ {reportChannelLabels[channel] ?? channel}
+                </span>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section className="mt-8">
           <div className="flex items-end justify-between gap-4">
             <div>
@@ -152,12 +206,22 @@ export default async function CaseDetailPage({
             </div>
           </div>
 
-          <div className="mt-5 space-y-5">
-            {incidents?.map((incident) => (
-              <article
-                key={incident.id}
-                className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm"
-              >
+          <div className="relative mt-6">
+            <div className="absolute bottom-0 left-[11px] top-0 w-px bg-gray-200 sm:left-[15px]" />
+
+            <div className="space-y-6">
+              {incidents?.map((incident) => (
+                <div
+                  key={incident.id}
+                  className="relative pl-10 sm:pl-12"
+                >
+                  <div className="absolute left-0 top-6 z-10 flex h-6 w-6 items-center justify-center rounded-full border-4 border-gray-50 bg-gray-950 sm:h-8 sm:w-8">
+                    <span className="h-2 w-2 rounded-full bg-white sm:h-2.5 sm:w-2.5" />
+                  </div>
+
+                  <article
+                    className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm"
+                  >
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <h3 className="font-semibold text-gray-950">
                     第 {incident.incident_number} 次紀錄
@@ -241,8 +305,10 @@ export default async function CaseDetailPage({
                       : '無'}
                   </span>
                 </div>
-              </article>
-            ))}
+                  </article>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 

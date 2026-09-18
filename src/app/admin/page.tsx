@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import AdminOwnerContact from '@/components/admin/AdminOwnerContact'
+import AdminCaseReports from '@/components/admin/AdminCaseReports'
 
 const doorLabels: Record<string, string> = {
   front_left: '左前門',
@@ -522,6 +523,10 @@ export default async function AdminPage({
                               className="mt-3 lg:absolute lg:right-6 lg:top-14 lg:mt-0"
                             />
 
+
+                            <AdminCaseReports
+                              vehicleId={vehicle.id}
+                            />
                             <p className="mt-2 text-sm font-medium text-blue-700">
                               第 {incident.incident_number} 次紀錄
                             </p>
@@ -764,6 +769,10 @@ export default async function AdminPage({
                               className="mt-3 lg:absolute lg:right-6 lg:top-14 lg:mt-0"
                             />
 
+
+                            <AdminCaseReports
+                              vehicleId={vehicle.id}
+                            />
                             <p className="mt-2 text-sm text-gray-500">
                               提交日期：
                               {new Date(

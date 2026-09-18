@@ -41,6 +41,14 @@ const repairLabels: Record<string, string> = {
   other: '其他',
 }
 
+const reportChannelLabels: Record<string, string> = {
+  lexus: 'Lexus 原廠／客服',
+  vehicle_safety: '車輛安全瑕疵通報',
+  consumer_protection: '消費者保護線上申訴',
+  '1950': '1950 消費者服務專線',
+  motc_mailbox: '交通部部長／民意信箱',
+}
+
 const moderationLabels: Record<string, string> = {
   pending: '審核中',
   approved: '已公開',
@@ -192,10 +200,27 @@ export default async function MyCaseDetailPage({
       updated_at
     `)
     .eq('vehicle_id', vehicle.id)
-    .order('incident_number', { ascending: true })
+    .order('incident_number', { ascending: false })
 
   if (incidentError) {
     throw new Error(incidentError.message)
+  }
+
+  const { data: caseReports, error: caseReportsError } =
+    await supabase
+      .from('case_reports')
+      .select(`
+        channel,
+        status,
+        reported_at,
+        reference_number,
+        note
+      `)
+      .eq('vehicle_id', vehicle.id)
+      .in('status', ['submitted', 'completed'])
+
+  if (caseReportsError) {
+    throw new Error(caseReportsError.message)
   }
 
   const feedbackPairs = await Promise.all(
@@ -322,13 +347,75 @@ export default async function MyCaseDetailPage({
               可以直接追加在同一個案件中。
             </p>
 
-            <Link
-              href={`/my-cases/${vehicle.public_case_id}/new-incident`}
-              className="rounded-xl bg-gray-950 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800"
-            >
-              ＋ 新增後續紀錄
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={`/my-cases/${vehicle.public_case_id}/reports`}
+                className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-900 transition hover:bg-gray-100"
+              >
+                管理正式反映
+              </Link>
+
+              <Link
+                href={`/my-cases/${vehicle.public_case_id}/new-incident`}
+                className="rounded-xl bg-gray-950 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800"
+              >
+                ＋ 新增後續紀錄
+              </Link>
+            </div>
           </div>
+
+          {(caseReports?.length ?? 0) > 0 && (
+            <div className="mt-5 border-t border-gray-100 pt-5">
+              <div className="mb-3">
+                <p className="text-sm font-semibold text-gray-900">
+                  正式反映
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {caseReports?.map((report) => (
+                  <div
+                    key={report.channel}
+                    className="rounded-2xl border border-blue-100 bg-white px-4 py-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-gray-950">
+                          {reportChannelLabels[report.channel] ??
+                            report.channel}
+                        </p>
+
+                        <p className="mt-1 text-xs text-green-700">
+                          ✓ 已正式反映
+                        </p>
+                      </div>
+
+                      {report.reported_at && (
+                        <span className="shrink-0 text-xs text-gray-400">
+                          {report.reported_at}
+                        </span>
+                      )}
+                    </div>
+
+                    {report.reference_number && (
+                      <p className="mt-2 text-xs text-gray-500">
+                        受理編號：
+                        <span className="font-medium text-gray-800">
+                          {report.reference_number}
+                        </span>
+                      </p>
+                    )}
+
+                    {report.note && (
+                      <p className="mt-2 text-xs leading-5 text-gray-500">
+                        {report.note}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </header>
 
         <section className="mt-8">
@@ -342,12 +429,22 @@ export default async function MyCaseDetailPage({
             </p>
           </div>
 
-          <div className="mt-6 space-y-5">
-            {incidents?.map((incident) => (
-              <article
-                key={incident.id}
-                className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm"
-              >
+          <div className="relative mt-6">
+            <div className="absolute bottom-0 left-[11px] top-0 w-px bg-gray-200 sm:left-[15px]" />
+
+            <div className="space-y-6">
+              {incidents?.map((incident) => (
+                <div
+                  key={incident.id}
+                  className="relative pl-10 sm:pl-12"
+                >
+                  <div className="absolute left-0 top-7 z-10 flex h-6 w-6 items-center justify-center rounded-full border-4 border-gray-50 bg-gray-950 sm:h-8 sm:w-8">
+                    <span className="h-2 w-2 rounded-full bg-white sm:h-2.5 sm:w-2.5" />
+                  </div>
+
+                  <article
+                    className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm"
+                  >
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <p className="text-xs font-medium text-gray-500">
@@ -522,8 +619,10 @@ export default async function MyCaseDetailPage({
                     </div>
                   </div>
                 )}
-              </article>
-            ))}
+                  </article>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
       </div>

@@ -54,7 +54,7 @@ async function createCase(formData: FormData) {
     redirect('/my-cases/new?error=missing_issue')
   }
 
-  const { error: createError } = await supabase.rpc(
+  const { data: createdCase, error: createError } = await supabase.rpc(
     'create_case_atomic',
     {
       p_model: model,
@@ -74,7 +74,58 @@ async function createCase(formData: FormData) {
 
   if (createError) {
     console.error('create_case_atomic error:', createError)
+
+    redirect(
+      `/my-cases/new?error=create&detail=${encodeURIComponent(
+        createError.message ?? 'Unknown error'
+      )}`
+    )
+  }
+
+  const vehicleId = createdCase?.[0]?.vehicle_id
+
+  if (!vehicleId) {
     redirect('/my-cases/new?error=create')
+  }
+
+  const reportingChannels = [
+    'lexus',
+    'vehicle_safety',
+    'consumer_protection',
+    '1950',
+    'motc_mailbox',
+  ]
+
+  for (const channel of reportingChannels) {
+    const status = String(
+      formData.get(`report_${channel}`) ?? ''
+    )
+
+    if (status !== 'submitted') {
+      continue
+    }
+
+    const { error: reportError } = await supabase.rpc(
+      'upsert_case_report',
+      {
+        p_vehicle_id: vehicleId,
+        p_channel: channel,
+        p_status: status,
+        p_reported_at:
+          status === 'submitted'
+            ? new Date().toISOString().slice(0, 10)
+            : null,
+        p_reference_number: null,
+        p_note: null,
+      }
+    )
+
+    if (reportError) {
+      console.error(
+        `upsert_case_report ${channel} error:`,
+        reportError
+      )
+    }
   }
 
   redirect('/my-cases?created=1')
@@ -83,7 +134,10 @@ async function createCase(formData: FormData) {
 export default async function NewCasePage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{
+    error?: string
+    detail?: string
+  }>
 }) {
   const params = await searchParams
 
@@ -134,7 +188,15 @@ export default async function NewCasePage({
 
         {errorMessage && (
           <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {errorMessage}
+            <p className="font-medium">
+              {errorMessage}
+            </p>
+
+            {params.detail && (
+              <p className="mt-2 break-words text-xs">
+                {params.detail}
+              </p>
+            )}
           </div>
         )}
 
@@ -338,6 +400,104 @@ export default async function NewCasePage({
                   className={inputClass}
                 />
               </label>
+            </div>
+          </section>
+
+          <hr className="border-gray-200" />
+
+          <section>
+            <h2 className="text-lg font-semibold text-gray-950">
+              正式反映／申訴進度
+            </h2>
+
+            <p className="mt-1 text-sm leading-6 text-gray-500">
+              選填。點擊管道名稱可直接前往官方網站進行反映或申訴；
+              完成後再將狀態改為「已正式反映」。
+            </p>
+
+            <div className="mt-5 space-y-4">
+              {[
+                {
+                  value: 'lexus',
+                  label: 'Lexus 原廠／客服',
+                  description: '向 Lexus 客服、經銷商或服務廠正式反映',
+                  href: 'https://www.lexus.com.tw/contact.aspx?s=faq&sid=1',
+                },
+                {
+                  value: 'vehicle_safety',
+                  label: '車輛安全瑕疵通報',
+                  description: '向交通部車輛安全瑕疵資訊通報平台提出通報',
+                  href: 'https://www.car-safety.org.tw/car_safety/VehicleFailureNotification',
+                },
+                {
+                  value: 'consumer_protection',
+                  label: '消費者保護線上申訴',
+                  description: '透過行政院消費者保護會提出正式線上申訴',
+                  href: 'https://appeal.cpc.ey.gov.tw/WWW/step_one.aspx',
+                },
+                {
+                  value: '1950',
+                  label: '1950 消費者服務專線',
+                  description: '查看官方說明；1950 可轉接所在地消費者服務中心',
+                  href: 'https://cpc.ey.gov.tw/Page/1DCF8AA4D223F601/ebc630d6-b774-4db5-abdc-5b52ed0963cc',
+                },
+                {
+                  value: 'motc_mailbox',
+                  label: '交通部部長／民意信箱',
+                  description: '向交通部提出陳情，可填寫內容並上傳附件',
+                  href: 'https://poms.motc.gov.tw/message/tw',
+                },
+              ].map((item) => (
+                <div
+                  key={item.value}
+                  className="rounded-2xl border border-gray-200 p-4"
+                >
+                  <div className="sm:flex sm:items-center sm:justify-between sm:gap-5">
+                    <div className="min-w-0">
+                      <a
+                        href={item.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-700 hover:text-blue-900"
+                        style={{
+                          textDecorationLine: 'underline',
+                          textDecorationStyle: 'dashed',
+                          textDecorationThickness: '1px',
+                          textUnderlineOffset: '4px',
+                          textDecorationColor: '#60a5fa',
+                        }}
+                      >
+                        {item.label}
+                        <span aria-hidden="true">↗</span>
+                      </a>
+
+                      <p className="mt-1 text-xs leading-5 text-gray-500">
+                        {item.description}
+                      </p>
+                    </div>
+
+                    <select
+                      name={`report_${item.value}`}
+                      defaultValue=""
+                      className="mt-3 rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-800 sm:mt-0"
+                    >
+                      <option value="">
+                        尚未反映
+                      </option>
+
+                      <option value="submitted">
+                        已正式反映
+                      </option>
+                    </select>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-blue-50 p-4 text-sm leading-6 text-blue-900">
+              點擊上方管道名稱可直接前往官方頁面。
+              完成申訴或通報後，再將狀態改為「已正式反映」，
+              才會加入平台的公開統計數據。
             </div>
           </section>
 

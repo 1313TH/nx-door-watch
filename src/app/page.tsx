@@ -3,6 +3,8 @@ import { LogoutButton } from '@/components/logout-button'
 import { UserAvatar } from '@/components/user-avatar'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createPublicClient } from '@/lib/supabase/public'
+import ReportingChannelIcon from '@/components/ReportingChannelIcon'
+import ActionMetricIcon from '@/components/ActionMetricIcon'
 import AdminOwnerContact from '@/components/admin/AdminOwnerContact'
 
 const doorLabels: Record<string, string> = {
@@ -109,7 +111,90 @@ export default async function HomePage() {
 
   const latestCases = publicCases.slice(0, 5)
 
-  const hasPublicError = vehicleError || incidentError
+  const latestCaseReportEntries = await Promise.all(
+    latestCases.map(async (vehicle) => {
+      const { data, error } = await publicSupabase.rpc(
+        'get_public_case_report_channels',
+        {
+          p_vehicle_id: vehicle.id,
+        }
+      )
+
+      if (error) {
+        console.error(
+          'get_public_case_report_channels error:',
+          error
+        )
+
+        return [vehicle.id, [] as string[]] as const
+      }
+
+      const channels: string[] = Array.from(
+        new Set<string>(
+          ((data ?? []) as { channel: string }[]).map(
+            (item) => String(item.channel)
+          )
+        )
+      )
+
+      return [vehicle.id, channels] as const
+    })
+  )
+
+  const latestCaseReportMap = new Map<
+    string,
+    string[]
+  >(latestCaseReportEntries)
+
+  const {
+    data: reportingSummaryRows,
+    error: reportingSummaryError,
+  } = await publicSupabase.rpc(
+    'get_public_reporting_summary'
+  )
+
+  const {
+    data: reportingChannelRows,
+    error: reportingChannelError,
+  } = await publicSupabase.rpc(
+    'get_public_reporting_channel_counts'
+  )
+
+  const reportingSummary =
+    reportingSummaryRows?.[0] ?? {
+      public_case_count: publicCases.length,
+      reported_case_count: 0,
+      unreported_case_count: publicCases.length,
+    }
+
+  const reportedCaseCount =
+    Number(reportingSummary.reported_case_count ?? 0)
+
+  const unreportedCaseCount =
+    Number(reportingSummary.unreported_case_count ?? 0)
+
+  const reportingRate =
+    publicCases.length > 0
+      ? Math.round(
+          (reportedCaseCount / publicCases.length) * 100
+        )
+      : 0
+
+  const reportChannelLabels: Record<string, string> = {
+    lexus: 'Lexus 原廠／客服',
+    vehicle_safety: '車輛安全瑕疵通報',
+    consumer_protection: '消費者保護線上申訴',
+    '1950': '1950 消費者服務專線',
+    motc_mailbox: '交通部部長／民意信箱',
+  }
+
+  const reportingChannels = reportingChannelRows ?? []
+
+  const hasPublicError =
+    vehicleError ||
+    incidentError ||
+    reportingSummaryError ||
+    reportingChannelError
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -350,6 +435,109 @@ export default async function HomePage() {
             </section>
 
             <section className="mt-16">
+              <div>
+                <h2 className="text-2xl font-semibold text-gray-950">
+                  車主行動進度
+                </h2>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  了解目前公開案例中，有多少車主已透過正式管道反映。
+                </p>
+              </div>
+
+              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm text-gray-500">
+                      公開案例
+                    </p>
+                    <ActionMetricIcon type="cases" />
+                  </div>
+                  <p className="mt-2 text-3xl font-semibold text-gray-950">
+                    {publicCases.length}
+                  </p>
+                </div>
+
+                <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm text-gray-500">
+                      至少已正式反映
+                    </p>
+                    <ActionMetricIcon type="reported" />
+                  </div>
+                  <p className="mt-2 text-3xl font-semibold text-gray-950">
+                    {reportedCaseCount}
+                  </p>
+                </div>
+
+                <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm text-gray-500">
+                      尚未正式反映
+                    </p>
+                    <ActionMetricIcon type="unreported" />
+                  </div>
+                  <p className="mt-2 text-3xl font-semibold text-gray-950">
+                    {unreportedCaseCount}
+                  </p>
+                </div>
+
+                <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm text-gray-500">
+                      正式反映率
+                    </p>
+                    <ActionMetricIcon type="rate" />
+                  </div>
+                  <p className="mt-2 text-3xl font-semibold text-gray-950">
+                    {reportingRate}%
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+                <h3 className="text-lg font-semibold text-gray-950">
+                  正式反映管道
+                </h3>
+
+                {reportingChannels.length > 0 ? (
+                  <div className="mt-5 space-y-3">
+                    {reportingChannels.map(
+                      (item: {
+                        channel: string
+                        case_count: number
+                      }) => (
+                        <div
+                          key={item.channel}
+                          className="flex items-center justify-between gap-4 rounded-2xl bg-gray-50 px-4 py-3"
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            <ReportingChannelIcon
+                              channel={item.channel}
+                            />
+
+                            <span className="truncate text-sm font-medium text-gray-800">
+                              {reportChannelLabels[item.channel] ??
+                                item.channel}
+                            </span>
+                          </div>
+
+                          <span className="shrink-0 text-sm font-semibold text-gray-950">
+                            {Number(item.case_count)} 案例
+                          </span>
+                        </div>
+                      )
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-5 rounded-2xl bg-gray-50 p-6 text-center text-sm text-gray-500">
+                    目前尚無正式反映紀錄
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="mt-16">
               <div className="flex flex-wrap items-end justify-between gap-4">
                 <div>
                   <h2 className="text-2xl font-semibold text-gray-950">
@@ -376,6 +564,9 @@ export default async function HomePage() {
                         incident.vehicle_id === vehicle.id
                     )
 
+                    const reportChannels: string[] =
+                      latestCaseReportMap.get(vehicle.id) ?? []
+
                     return (
                       <Link
                         key={vehicle.id}
@@ -399,6 +590,27 @@ export default async function HomePage() {
                               ).length} 次紀錄
                             </span>
                           </div>
+
+                        {reportChannels.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {reportChannels
+                              .slice(0, 3)
+                              .map((channel) => (
+                                <span
+                                  key={channel}
+                                  className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700"
+                                >
+                                  {reportChannelLabels[channel] ?? channel}
+                                </span>
+                              ))}
+
+                            {reportChannels.length > 3 && (
+                              <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-medium text-gray-500">
+                                +{reportChannels.length - 3}
+                              </span>
+                            )}
+                          </div>
+                        )}
                         </div>
 
                         <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
@@ -458,6 +670,92 @@ export default async function HomePage() {
             </section>
           </>
         )}
+
+        <section className="mt-16">
+          <div>
+            <h2 className="text-2xl font-semibold text-gray-950">
+              正式通報與申訴管道
+            </h2>
+
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">
+              若你遇到電子門相關問題，除了在 NX Door Watch 留下案例，
+              也可以依問題性質透過以下官方管道正式反映。
+            </p>
+          </div>
+
+          <div className="mt-5">
+            <Link
+              href="/report"
+              className="inline-flex text-sm font-medium text-gray-900 underline decoration-dashed underline-offset-4"
+            >
+              查看完整申訴指南 →
+            </Link>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            {[
+              {
+                title: 'Lexus 原廠／客服',
+                description:
+                  '適合先向 Lexus 客服、經銷商或服務廠建立正式案件並追蹤。',
+                href:
+                  'https://www.lexus.com.tw/contact.aspx?s=faq&sid=1',
+              },
+              {
+                title: '車輛安全瑕疵通報',
+                description:
+                  '若問題可能涉及車輛安全，可向交通主管機關提交正式瑕疵通報。',
+                href:
+                  'https://www.car-safety.org.tw/car_safety/VehicleFailureNotification',
+              },
+              {
+                title: '消費者保護線上申訴',
+                description:
+                  '適合保固、維修費、待料或服務處理等消費爭議。',
+                href:
+                  'https://appeal.cpc.ey.gov.tw/WWW/step_one.aspx',
+              },
+              {
+                title: '1950 消費者服務專線',
+                description:
+                  '不確定該走哪個流程時，可先透過 1950 詢問處理方向。',
+                href:
+                  'https://cpc.ey.gov.tw/Page/1DCF8AA4D223F601/ebc630d6-b774-4db5-abdc-5b52ed0963cc',
+              },
+              {
+                title: '交通部部長／民意信箱',
+                description:
+                  '可向交通部提出完整陳情內容，並依官方流程提供附件。',
+                href:
+                  'https://poms.motc.gov.tw/message/tw',
+              },
+            ].map((item) => (
+              <a
+                key={item.title}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group rounded-3xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="font-semibold text-gray-950">
+                      {item.title}
+                    </h3>
+
+                    <p className="mt-2 text-sm leading-6 text-gray-600">
+                      {item.description}
+                    </p>
+                  </div>
+
+                  <span className="text-sm text-gray-400 transition group-hover:text-gray-900">
+                    ↗
+                  </span>
+                </div>
+              </a>
+            ))}
+          </div>
+        </section>
 
         <footer className="mt-16 border-t border-gray-200 py-8 text-sm leading-6 text-gray-500">
           NX Door Watch 為車主案例資訊整理平台。

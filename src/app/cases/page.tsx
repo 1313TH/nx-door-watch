@@ -98,6 +98,31 @@ export default async function CasesPage({
   const publicCases = vehicles ?? []
   const publicIncidents = incidents ?? []
 
+  const reportingEntries = await Promise.all(
+    publicCases.map(async (vehicle) => {
+      const { data } = await supabase.rpc(
+        'get_public_case_report_channels',
+        {
+          p_vehicle_id: vehicle.id,
+        }
+      )
+
+      return [
+        vehicle.id,
+        new Set(
+          (data ?? []).map(
+            (item: { channel: string }) => item.channel
+          )
+        ).size,
+      ] as const
+    })
+  )
+
+  const reportingCountMap = new Map(reportingEntries)
+
+  const reportingCountForVehicle = (vehicleId: string) =>
+    reportingCountMap.get(vehicleId) ?? 0
+
   const modelOptions = [...new Set(publicCases.map((item) => item.model))]
     .filter(Boolean)
     .sort()
@@ -525,6 +550,13 @@ export default async function CasesPage({
                       <h2 className="mt-1 text-2xl font-semibold text-gray-950">
                         {vehicle.model_year} {vehicle.model}
                       </h2>
+
+                      {reportingCountForVehicle(vehicle.id) > 0 && (
+                        <p className="mt-2 text-xs font-medium text-blue-700">
+                          已正式反映{' '}
+                          {reportingCountForVehicle(vehicle.id)} 個管道
+                        </p>
+                      )}
                     </div>
 
                     <span className="rounded-full bg-green-50 px-3 py-1 text-sm font-medium text-green-700">

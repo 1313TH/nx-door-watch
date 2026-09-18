@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import AdminOwnerContact from '@/components/admin/AdminOwnerContact'
+import AdminCaseReports from '@/components/admin/AdminCaseReports'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -420,11 +421,18 @@ export default async function AdminRequestsPage({
                         </h3>
 
                     {vehicle && (
+                      <>
                       <AdminOwnerContact
                         vehicleId={vehicle.id}
                         className="mt-3 lg:absolute lg:right-6 lg:top-14 lg:mt-0"
                       />
-                    )}
+
+
+                      <AdminCaseReports
+                        vehicleId={vehicle.id}
+                      />
+              </>
+            )}
                       </div>
 
                       <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
@@ -581,10 +589,17 @@ export default async function AdminRequestsPage({
                     </h3>
 
                     {vehicle && (
+                      <>
                       <AdminOwnerContact
                         vehicleId={vehicle.id}
                         className="mt-3 lg:absolute lg:right-6 lg:top-14 lg:mt-0"
                       />
+
+
+                      <AdminCaseReports
+                        vehicleId={vehicle.id}
+                      />
+                      </>
                     )}
 
                     <div className="mt-4 rounded-2xl bg-red-50 p-4 text-sm leading-6 text-red-900">
@@ -665,10 +680,17 @@ export default async function AdminRequestsPage({
                   </h3>
 
                     {vehicle && (
+                      <>
                       <AdminOwnerContact
                         vehicleId={vehicle.id}
                         className="mt-3 lg:absolute lg:right-6 lg:top-14 lg:mt-0"
                       />
+
+
+                      <AdminCaseReports
+                        vehicleId={vehicle.id}
+                      />
+                      </>
                     )}
 
                   <p className="mt-3 text-sm text-gray-600">

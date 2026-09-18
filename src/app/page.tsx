@@ -29,29 +29,40 @@ export default async function HomePage() {
   // 公開統計永遠使用匿名 Client
   const publicSupabase = createPublicClient()
 
-  const { data: vehicles, error: vehicleError } = await publicSupabase
-    .from('vehicles')
-    .select(`
-      id,
-      public_case_id,
-      model,
-      model_year,
-      published_at
-    `)
-    .order('published_at', { ascending: false })
+  const [
+    {
+      data: vehicles,
+      error: vehicleError,
+    },
+    {
+      data: incidents,
+      error: incidentError,
+    },
+  ] = await Promise.all([
+    publicSupabase
+      .from('vehicles')
+      .select(`
+        id,
+        public_case_id,
+        model,
+        model_year,
+        published_at
+      `)
+      .order('published_at', { ascending: false }),
 
-  const { data: incidents, error: incidentError } = await publicSupabase
-    .from('incidents')
-    .select(`
-      id,
-      vehicle_id,
-      mileage,
-      incident_date,
-      door_positions,
-      symptoms,
-      repair_status
-    `)
-    .order('incident_date', { ascending: false })
+    publicSupabase
+      .from('incidents')
+      .select(`
+        id,
+        vehicle_id,
+        mileage,
+        incident_date,
+        door_positions,
+        symptoms,
+        repair_status
+      `)
+      .order('incident_date', { ascending: false }),
+  ])
 
   // 登入狀態只用來決定導航按鈕
   const serverSupabase = await createServerClient()

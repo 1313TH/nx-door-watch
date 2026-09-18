@@ -75,41 +75,57 @@ export default async function CasesPage({
 
   const vehicleIds = vehicles?.map((vehicle) => vehicle.id) ?? []
 
-  const { data: incidents, error: incidentError } =
+  const [
+    {
+      data: incidents,
+      error: incidentError,
+    },
+    {
+      data: reportingRows,
+      error: reportingError,
+    },
+  ] =
     vehicleIds.length > 0
-      ? await supabase
-          .from('incidents')
-          .select(`
-            id,
-            vehicle_id,
-            incident_number,
-            mileage,
-            incident_date,
-            door_positions,
-            symptoms,
-            occurrence_frequency,
-            repair_status,
-            moderation_status
-          `)
-          .in('vehicle_id', vehicleIds)
-          .order('incident_number', { ascending: false })
-      : { data: [], error: null }
+      ? await Promise.all([
+          supabase
+            .from('incidents')
+            .select(`
+              id,
+              vehicle_id,
+              incident_number,
+              mileage,
+              incident_date,
+              door_positions,
+              symptoms,
+              occurrence_frequency,
+              repair_status,
+              moderation_status
+            `)
+            .in('vehicle_id', vehicleIds)
+            .order('incident_number', {
+              ascending: false,
+            }),
+
+          supabase.rpc(
+            'get_public_case_report_channels_batch',
+            {
+              p_vehicle_ids: vehicleIds,
+            }
+          ),
+        ])
+      : [
+          {
+            data: [],
+            error: null,
+          },
+          {
+            data: [],
+            error: null,
+          },
+        ]
 
   const publicCases = vehicles ?? []
   const publicIncidents = incidents ?? []
-
-  const {
-    data: reportingRows,
-    error: reportingError,
-  } =
-    vehicleIds.length > 0
-      ? await supabase.rpc(
-          'get_public_case_report_channels_batch',
-          {
-            p_vehicle_ids: vehicleIds,
-          }
-        )
-      : { data: [], error: null }
 
   const reportingCountMap = new Map<
     string,
@@ -140,20 +156,32 @@ export default async function CasesPage({
     .filter(Boolean)
     .sort((a, b) => Number(b) - Number(a))
 
-  const incidentsForVehicle = (vehicleId: string) =>
-    publicIncidents.filter(
-      (incident) => incident.vehicle_id === vehicleId
+  const incidentsByVehicle = new Map<
+    string,
+    typeof publicIncidents
+  >()
+
+  for (const incident of publicIncidents) {
+    const current =
+      incidentsByVehicle.get(incident.vehicle_id) ?? []
+
+    current.push(incident)
+
+    incidentsByVehicle.set(
+      incident.vehicle_id,
+      current
     )
-
-  const latestIncidentForVehicle = (vehicleId: string) => {
-    const list = incidentsForVehicle(vehicleId)
-
-    return [...list].sort(
-      (a, b) =>
-        Number(b.incident_number ?? 0) -
-        Number(a.incident_number ?? 0)
-    )[0]
   }
+
+  const incidentsForVehicle = (
+    vehicleId: string
+  ) =>
+    incidentsByVehicle.get(vehicleId) ?? []
+
+  const latestIncidentForVehicle = (
+    vehicleId: string
+  ) =>
+    incidentsForVehicle(vehicleId)[0]
 
   let filteredCases = publicCases.filter((vehicle) => {
     const vehicleIncidents = incidentsForVehicle(vehicle.id)

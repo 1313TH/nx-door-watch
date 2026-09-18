@@ -304,7 +304,7 @@ export default async function CasesPage({
           </div>
         </header>
 
-      <details className="group mt-9 md:contents">
+      <details className="group mt-9 md:hidden">
         <summary className="flex cursor-pointer list-none items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5 text-sm font-medium text-gray-900 shadow-sm md:hidden">
           <span>
             搜尋與篩選條件
@@ -321,7 +321,7 @@ export default async function CasesPage({
         <form
           action="/cases"
           method="get"
-          className="hidden rounded-3xl group-open:block md:mt-9 md:block border border-gray-200 bg-white p-5 shadow-sm"
+          className="hidden rounded-3xl border border-gray-200 bg-white p-5 shadow-sm group-open:block"
         >
           <div className="grid gap-4 lg:grid-cols-6">
             <label className="lg:col-span-2">
@@ -465,6 +465,153 @@ export default async function CasesPage({
           </div>
         </form>
       </details>
+
+        <form
+          action="/cases"
+          method="get"
+          className="mt-9 hidden rounded-3xl border border-gray-200 bg-white p-5 shadow-sm md:block"
+        >
+          <div className="grid gap-4 lg:grid-cols-6">
+            <label className="lg:col-span-2">
+              <span className="text-xs font-medium text-gray-500">
+                搜尋
+              </span>
+
+              <input
+                type="search"
+                name="q"
+                defaultValue={getParam('q')}
+                placeholder="案件編號、車型或年式"
+                className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-950 outline-none focus:border-gray-900"
+              />
+            </label>
+
+            <label>
+              <span className="text-xs font-medium text-gray-500">
+                車型
+              </span>
+
+              <select
+                name="model"
+                defaultValue={model}
+                className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm"
+              >
+                <option value="">全部車型</option>
+
+                {modelOptions.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              <span className="text-xs font-medium text-gray-500">
+                年式
+              </span>
+
+              <select
+                name="year"
+                defaultValue={year}
+                className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm"
+              >
+                <option value="">全部年式</option>
+
+                {yearOptions.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              <span className="text-xs font-medium text-gray-500">
+                問題位置
+              </span>
+
+              <select
+                name="door"
+                defaultValue={door}
+                className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm"
+              >
+                <option value="">全部位置</option>
+
+                {Object.entries(doorLabels).map(([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              <span className="text-xs font-medium text-gray-500">
+                症狀
+              </span>
+
+              <select
+                name="symptom"
+                defaultValue={symptom}
+                className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm"
+              >
+                <option value="">全部症狀</option>
+
+                {Object.entries(symptomLabels).map(([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-end justify-between gap-4 border-t border-gray-100 pt-4">
+            <label className="min-w-52">
+              <span className="text-xs font-medium text-gray-500">
+                排序
+              </span>
+
+              <select
+                name="sort"
+                defaultValue={sort}
+                className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm"
+              >
+                <option value="published_newest">
+                  最新公開
+                </option>
+                <option value="incident_newest">
+                  最新發生日期
+                </option>
+                <option value="mileage_asc">
+                  里程低 → 高
+                </option>
+                <option value="mileage_desc">
+                  里程高 → 低
+                </option>
+              </select>
+            </label>
+
+            <div className="flex gap-2">
+              {hasFilters && (
+                <Link
+                  href="/cases"
+                  className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  清除篩選
+                </Link>
+              )}
+
+              <button
+                type="submit"
+                className="rounded-xl bg-gray-950 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
+              >
+                套用
+              </button>
+            </div>
+          </div>
+        </form>
 
         {activeFilters.length > 0 && (
           <div className="mt-4 flex flex-wrap items-center gap-2">

@@ -332,10 +332,10 @@ export default async function AdminPage({
   const totalPending = newCaseCount + followupCount
 
   const doneMessages: Record<string, string> = {
-    approved: '新案件已核准並公開。',
+    approved: '新案件已完成審核。',
     needs_revision: '已要求車主修改新案件資料。',
     rejected: '新案件已拒絕。',
-    incident_approved: '後續紀錄已核准並公開。',
+    incident_approved: '後續紀錄已完成審核。',
     incident_needs_revision: '已要求車主修改這筆後續紀錄。',
     incident_rejected: '後續紀錄已拒絕。',
   }
@@ -378,7 +378,7 @@ export default async function AdminPage({
             </h1>
 
             <p className="mt-2 text-sm text-gray-600">
-              審核新案件，以及已公開案件新增的後續紀錄。
+              檢查已先行公開的新案件與後續紀錄；若內容需要修正，可立即暫時隱藏並要求車主修改。
             </p>
 
             <Link
@@ -474,7 +474,7 @@ export default async function AdminPage({
               <div>
                 <div className="flex items-center gap-3">
                   <h2 className="text-xl font-semibold text-gray-950">
-                    待審後續紀錄
+                    已公開・待審後續紀錄
                   </h2>
 
                   <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
@@ -484,14 +484,14 @@ export default async function AdminPage({
 
                 <p className="mt-1 text-sm text-gray-500">
                   已公開案件新增的故障或維修紀錄。
-                  核准前不會出現在公開案例中。
+                  新紀錄已先公開，管理員再進行後續審核。
                 </p>
               </div>
 
               {pendingFollowupIncidents.length === 0 ? (
                 <div className="mt-5 rounded-3xl border border-dashed border-gray-300 bg-white p-10 text-center">
                   <p className="font-medium text-gray-900">
-                    目前沒有待審後續紀錄
+                    目前沒有已公開・待審後續紀錄
                   </p>
                 </div>
               ) : (
@@ -533,7 +533,7 @@ export default async function AdminPage({
                           </div>
 
                           <span className="rounded-full bg-amber-50 px-3 py-1 text-sm font-medium text-amber-700">
-                            後續紀錄待審
+                            已公開・待後審
                           </span>
                         </div>
 
@@ -694,7 +694,7 @@ export default async function AdminPage({
                                 value="needs_revision"
                                 className="rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-medium text-amber-700 hover:bg-amber-50"
                               >
-                                要求修改
+                                要求修改並暫時隱藏
                               </button>
 
                               <button
@@ -703,7 +703,7 @@ export default async function AdminPage({
                                 value="approved"
                                 className="rounded-xl bg-gray-950 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
                               >
-                                核准這筆紀錄
+                                完成這筆審核
                               </button>
                             </div>
                           </form>
@@ -720,7 +720,7 @@ export default async function AdminPage({
               <div>
                 <div className="flex items-center gap-3">
                   <h2 className="text-xl font-semibold text-gray-950">
-                    待審新案件
+                    已公開・待審新案件
                   </h2>
 
                   <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
@@ -729,7 +729,7 @@ export default async function AdminPage({
                 </div>
 
                 <p className="mt-1 text-sm text-gray-500">
-                  尚未公開的新車主案件。
+                  已公開、等待管理員後續審核的新車主案件。
                 </p>
               </div>
 
@@ -737,7 +737,7 @@ export default async function AdminPage({
               pendingVehicles.length === 0 ? (
                 <div className="mt-5 rounded-3xl border border-dashed border-gray-300 bg-white p-10 text-center">
                   <p className="font-medium text-gray-900">
-                    目前沒有待審新案件
+                    目前沒有已公開・待審新案件
                   </p>
                 </div>
               ) : (
@@ -782,7 +782,7 @@ export default async function AdminPage({
                           </div>
 
                           <span className="rounded-full bg-amber-50 px-3 py-1 text-sm font-medium text-amber-700">
-                            新案件待審
+                            已公開・待後審
                           </span>
                         </div>
 
@@ -909,7 +909,7 @@ export default async function AdminPage({
                                 value="needs_revision"
                                 className="rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-medium text-amber-700 hover:bg-amber-50"
                               >
-                                要求修改
+                                要求修改並暫時隱藏
                               </button>
 
                               <button
@@ -918,7 +918,7 @@ export default async function AdminPage({
                                 value="approved"
                                 className="rounded-xl bg-gray-950 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800"
                               >
-                                核准公開
+                                完成審核
                               </button>
                             </div>
                           </form>

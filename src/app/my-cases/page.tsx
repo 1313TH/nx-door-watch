@@ -12,8 +12,10 @@ function getStatusLabel(status: string) {
       return '未通過'
     case 'deleted':
       return '已移除'
+    case 'pending':
+      return '已公開・待審'
     default:
-      return '審核中'
+      return status
   }
 }
 

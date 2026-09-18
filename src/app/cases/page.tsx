@@ -298,7 +298,7 @@ export default async function CasesPage({
             </h1>
 
             <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
-              搜尋與篩選已通過管理員審核的匿名車主案例。
+              搜尋與篩選目前公開中的匿名車主案例；案件會由管理員持續進行後續審核。
             </p>
           </div>
 
@@ -725,8 +725,16 @@ export default async function CasesPage({
                       )}
                     </div>
 
-                    <span className="rounded-full bg-green-50 px-3 py-1 text-sm font-medium text-green-700">
-                      已公開
+                    <span
+                      className={
+                        vehicle.moderation_status === 'approved'
+                          ? 'rounded-full bg-green-50 px-3 py-1 text-sm font-medium text-green-700'
+                          : 'rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700'
+                      }
+                    >
+                      {vehicle.moderation_status === 'approved'
+                        ? '已完成審核'
+                        : '公開中・待後審'}
                     </span>
                   </div>
 

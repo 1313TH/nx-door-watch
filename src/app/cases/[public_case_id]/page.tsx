@@ -154,7 +154,9 @@ export default async function CaseDetailPage({
             </div>
 
             <span className="rounded-full bg-green-50 px-3 py-1 text-sm font-medium text-green-700">
-              已審核公開
+              {vehicle.moderation_status === 'approved'
+                ? '已完成審核'
+                : '公開中・待後審'}
             </span>
           </div>
 
@@ -313,7 +315,7 @@ export default async function CaseDetailPage({
         </section>
 
         <footer className="mt-8 rounded-2xl border border-gray-200 bg-white p-5 text-sm leading-6 text-gray-500">
-          案例內容來自車主回報，經平台審核後公開。
+          案例內容來自車主回報，送出後先匿名公開，並由平台持續進行後續審核。
           個別案例僅供其他 Lexus NX 車主參考，不代表所有車輛皆會發生相同狀況。
         </footer>
       </div>

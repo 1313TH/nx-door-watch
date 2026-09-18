@@ -50,8 +50,8 @@ const reportChannelLabels: Record<string, string> = {
 }
 
 const moderationLabels: Record<string, string> = {
-  pending: '審核中',
-  approved: '已公開',
+  pending: '已公開・待審',
+  approved: '已完成審核',
   needs_revision: '需要修改',
   rejected: '未通過',
   withdrawn: '已撤回',
@@ -64,7 +64,7 @@ function moderationStyle(status: string) {
   }
 
   if (status === 'pending') {
-    return 'bg-amber-50 text-amber-700'
+    return 'bg-blue-50 text-blue-700'
   }
 
   if (status === 'needs_revision') {
@@ -180,6 +180,31 @@ export default async function MyCaseDetailPage({
     notFound()
   }
 
+  const {
+    data: caseFeedbackRows,
+    error: caseFeedbackError,
+  } =
+    vehicle.moderation_status === 'needs_revision'
+      ? await supabase.rpc(
+          'get_case_feedback',
+          {
+            p_vehicle_id: vehicle.id,
+          }
+        )
+      : { data: [], error: null }
+
+  if (caseFeedbackError) {
+    console.error(
+      'get_case_feedback error:',
+      caseFeedbackError
+    )
+  }
+
+  const caseFeedback =
+    Array.isArray(caseFeedbackRows)
+      ? caseFeedbackRows[0] ?? null
+      : caseFeedbackRows ?? null
+
   const { data: incidents, error: incidentError } = await supabase
     .from('incidents')
     .select(`
@@ -269,13 +294,13 @@ export default async function MyCaseDetailPage({
 
         {query.updated === '1' && (
           <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-            待審紀錄已更新，狀態仍維持「審核中」。
+            紀錄已更新並立即恢復公開，目前等待管理員後續審核。
           </div>
         )}
 
         {query.case_updated === '1' && (
           <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-            案件資料已更新，並重新送交管理員審核。
+            案件資料已更新並重新公開，目前等待管理員後續審核。
           </div>
         )}
 
@@ -287,7 +312,7 @@ export default async function MyCaseDetailPage({
 
         {query.resubmitted === '1' && (
           <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-            修改完成，這筆紀錄已重新送交管理員審核。
+            修改完成，這筆紀錄已重新公開並等待管理員後續審核。
           </div>
         )}
 
@@ -324,6 +349,31 @@ export default async function MyCaseDetailPage({
             </span>
           </div>
 
+          {vehicle.moderation_status ===
+            'needs_revision' && (
+            <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+              <p className="font-semibold text-amber-950">
+                管理員要求修改
+              </p>
+
+              <p className="mt-2 text-sm leading-6 text-amber-900">
+                此案件目前已暫時從公開案例中隱藏。
+                完成修正並送出後，案件會立即重新公開並再次進入後審流程。
+              </p>
+
+              <div className="mt-4 rounded-xl border border-amber-200 bg-white px-4 py-3">
+                <p className="text-xs font-medium text-amber-700">
+                  管理員說明
+                </p>
+
+                <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-gray-800">
+                  {caseFeedback?.note ||
+                    '請依照案件內容重新檢查並補充必要資訊。'}
+                </p>
+              </div>
+            </div>
+          )}
+
           {['pending', 'needs_revision'].includes(
             vehicle.moderation_status
           ) && (
@@ -336,7 +386,7 @@ export default async function MyCaseDetailPage({
               </Link>
 
               <p className="flex items-center text-xs text-gray-500">
-                修改後會重新進入審核。
+                修改後會立即公開並重新進入後審流程。
               </p>
             </div>
           )}
@@ -548,7 +598,7 @@ export default async function MyCaseDetailPage({
                 {incident.moderation_status === 'pending' && (
                   <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
                     <p className="text-sm leading-6 text-amber-800">
-                      這筆新紀錄正在審核中；審核通過前不會顯示在公開案例頁。
+                      這筆新紀錄目前已公開，並等待管理員進行後續審核。
                     </p>
 
                     <p className="mt-1 text-xs text-amber-700">
@@ -561,7 +611,7 @@ export default async function MyCaseDetailPage({
                         href={`/my-cases/${vehicle.public_case_id}/incidents/${incident.id}/edit`}
                         className="inline-flex rounded-xl border border-amber-300 bg-white px-4 py-2.5 text-sm font-medium text-amber-900 hover:bg-amber-100"
                       >
-                        修改待審紀錄
+                        修改這筆紀錄
                       </Link>
 
                       <WithdrawIncidentForm

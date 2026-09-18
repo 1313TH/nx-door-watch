@@ -271,7 +271,7 @@ export default async function HomePage() {
 
             <p className="mt-5 max-w-2xl text-base leading-7 text-gray-600">
               蒐集車主實際發生狀況、里程、問題位置與維修進度。
-              所有公開案例皆先經管理員審核，並移除車主個人識別資訊。
+              案例送出後會先匿名公開，管理員再進行後續審核；若內容需要修正，案例會暫時隱藏直到車主完成修改。
             </p>
 
             <div className="mt-7 flex flex-wrap gap-3">
@@ -552,7 +552,7 @@ export default async function HomePage() {
                     最新公開案例
                   </h2>
                   <p className="mt-1 text-sm text-gray-500">
-                    最近通過審核並公開的車主案例
+                    最近由車主回報並公開的匿名案例
                   </p>
                 </div>
 

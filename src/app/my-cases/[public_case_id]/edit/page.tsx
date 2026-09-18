@@ -247,8 +247,8 @@ export default async function EditCasePage({
         <p className="mt-2 text-sm leading-6 text-gray-600">
           {vehicle.moderation_status ===
           'needs_revision'
-            ? '請依照管理員要求修正資料。送出後會重新進入審核。'
-            : '案件仍在審核中，你可以在審核完成前修改內容。'}
+            ? '請依照管理員要求修正資料。送出後案件會重新公開，並回到待後審狀態。'
+            : '案件目前已公開並等待後續審核，你仍可在審核完成前修改內容。'}
         </p>
 
         {errorMessage && (
@@ -547,8 +547,8 @@ export default async function EditCasePage({
           </section>
 
           <div className="rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-            儲存修改後，案件會回到「審核中」。
-            在管理員重新核准以前，不會公開。
+            儲存修改後，案件會立即恢復公開並回到「已公開・待審」狀態，
+            管理員會再進行後續確認。
           </div>
 
           <div className="flex justify-end gap-3">
@@ -563,7 +563,7 @@ export default async function EditCasePage({
               type="submit"
               className="rounded-xl bg-gray-950 px-6 py-3 font-medium text-white hover:bg-gray-800"
             >
-              儲存並重新送審
+              儲存並重新公開
             </button>
           </div>
         </form>

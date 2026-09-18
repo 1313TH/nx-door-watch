@@ -177,8 +177,8 @@ export default async function NewCasePage({
         </h1>
 
         <p className="mt-2 text-sm leading-6 text-gray-600">
-          資料送出後會先進入審核，不會立即公開。
-          審核完成後仍可回到「我的案件」查看與更新進度。
+          資料送出後會立即以匿名方式公開，並進入管理員後續審核。
+          若管理員要求修改，案件會暫時從公開頁隱藏，完成修正後即可重新公開。
         </p>
 
         {errorMessage && (
@@ -505,8 +505,8 @@ export default async function NewCasePage({
           </section>
 
           <div className="rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-            送出後案件狀態會是「審核中」。
-            在管理員核准以前，不會出現在公開案例資料中。
+            送出後案件會立即匿名公開，狀態顯示為「已公開・待審」。
+            管理員若發現資料需要補充或修正，可暫時隱藏案件並要求你修改。
           </div>
 
           <div className="flex justify-end gap-3">

@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { LogoutButton } from '@/components/logout-button'
 import { UserAvatar } from '@/components/user-avatar'
 import { createClient as createServerClient } from '@/lib/supabase/server'
-import { createPublicClient } from '@/lib/supabase/public'
+import { getCachedHomePublicData } from '@/lib/public-data'
 import ReportingChannelIcon from '@/components/ReportingChannelIcon'
 import ActionMetricIcon from '@/components/ActionMetricIcon'
 import AdminOwnerContact from '@/components/admin/AdminOwnerContact'
@@ -26,43 +26,15 @@ const symptomLabels: Record<string, string> = {
 export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
-  // 公開統計永遠使用匿名 Client
-  const publicSupabase = createPublicClient()
-
-  const [
-    {
-      data: vehicles,
-      error: vehicleError,
-    },
-    {
-      data: incidents,
-      error: incidentError,
-    },
-  ] = await Promise.all([
-    publicSupabase
-      .from('vehicles')
-      .select(`
-        id,
-        public_case_id,
-        model,
-        model_year,
-        published_at
-      `)
-      .order('published_at', { ascending: false }),
-
-    publicSupabase
-      .from('incidents')
-      .select(`
-        id,
-        vehicle_id,
-        mileage,
-        incident_date,
-        door_positions,
-        symptoms,
-        repair_status
-      `)
-      .order('incident_date', { ascending: false }),
-  ])
+  // 匿名公開資料使用短時間快取
+  const {
+    vehicles,
+    incidents,
+    latestReportRows,
+    reportingSummaryRows,
+    reportingChannelRows,
+    errors: publicDataErrors,
+  } = await getCachedHomePublicData()
 
   // 登入狀態只用來決定導航按鈕
   const serverSupabase = await createServerClient()
@@ -187,19 +159,6 @@ export default async function HomePage() {
   const latestVehicleIds =
     latestCases.map((vehicle) => vehicle.id)
 
-  const {
-    data: latestReportRows,
-    error: latestReportError,
-  } =
-    latestVehicleIds.length > 0
-      ? await publicSupabase.rpc(
-          'get_public_case_report_channels_batch',
-          {
-            p_vehicle_ids: latestVehicleIds,
-          }
-        )
-      : { data: [], error: null }
-
   const latestCaseReportMap =
     new Map<string, string[]>()
 
@@ -212,20 +171,6 @@ export default async function HomePage() {
       [...current, row.channel]
     )
   }
-
-  const {
-    data: reportingSummaryRows,
-    error: reportingSummaryError,
-  } = await publicSupabase.rpc(
-    'get_public_reporting_summary'
-  )
-
-  const {
-    data: reportingChannelRows,
-    error: reportingChannelError,
-  } = await publicSupabase.rpc(
-    'get_public_reporting_channel_counts'
-  )
 
   const reportingSummary =
     reportingSummaryRows?.[0] ?? {
@@ -258,11 +203,13 @@ export default async function HomePage() {
   const reportingChannels = reportingChannelRows ?? []
 
   const hasPublicError =
-    vehicleError ||
-    incidentError ||
-    reportingSummaryError ||
-    reportingChannelError ||
-    latestReportError
+    Boolean(
+      publicDataErrors.vehicle ||
+      publicDataErrors.incident ||
+      publicDataErrors.reportingSummary ||
+      publicDataErrors.reportingChannel ||
+      publicDataErrors.latestReport
+    )
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -417,7 +364,11 @@ export default async function HomePage() {
         {hasPublicError && (
           <div className="mt-10 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
             公開統計資料讀取失敗：
-            {vehicleError?.message ?? incidentError?.message}
+            {publicDataErrors.vehicle ??
+              publicDataErrors.incident ??
+              publicDataErrors.reportingSummary ??
+              publicDataErrors.reportingChannel ??
+              publicDataErrors.latestReport}
           </div>
         )}
 

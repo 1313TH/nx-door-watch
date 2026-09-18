@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { createPublicClient } from '@/lib/supabase/public'
+import { getCachedPublicCaseDetail } from '@/lib/public-data'
 
 const doorLabels: Record<string, string> = {
   front_left: '左前門',
@@ -65,56 +65,27 @@ export default async function CaseDetailPage({
       ? '← 回首頁'
       : '← 回公開案例'
 
-  const supabase = createPublicClient()
+  const {
+    vehicle,
+    incidents,
+    reportChannels,
+    errors: publicDataErrors,
+  } = await getCachedPublicCaseDetail(
+    public_case_id
+  )
 
-  const { data: vehicle, error: vehicleError } = await supabase
-    .from('vehicles')
-    .select(`
-      id,
-      public_case_id,
-      model,
-      model_year,
-      moderation_status,
-      published_at
-    `)
-    .eq('public_case_id', public_case_id)
-    .maybeSingle()
-
-  if (vehicleError || !vehicle) {
+  if (
+    !vehicle ||
+    publicDataErrors.vehicle
+  ) {
     notFound()
   }
 
-  const { data: incidents, error: incidentError } = await supabase
-    .from('incidents')
-    .select(`
-      id,
-      vehicle_id,
-      incident_number,
-      mileage,
-      incident_date,
-      door_positions,
-      symptoms,
-      occurrence_frequency,
-      dealer_visited,
-      has_work_order,
-      repair_status,
-      has_quote,
-      quoted_amount,
-      moderation_status
-    `)
-    .eq('vehicle_id', vehicle.id)
-    .order('incident_number', { ascending: false })
-
-  if (incidentError) {
-    throw new Error(incidentError.message)
+  if (publicDataErrors.incident) {
+    throw new Error(
+      publicDataErrors.incident
+    )
   }
-
-  const { data: reportChannels } = await supabase.rpc(
-    'get_public_case_report_channels',
-    {
-      p_vehicle_id: vehicle.id,
-    }
-  )
 
   const uniqueReportChannels: string[] = Array.from(
     new Set<string>(

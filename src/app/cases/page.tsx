@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { createPublicClient } from '@/lib/supabase/public'
+import { getCachedCasesPublicData } from '@/lib/public-data'
 
 const doorLabels: Record<string, string> = {
   front_left: '左前門',
@@ -59,73 +59,18 @@ export default async function CasesPage({
   const symptom = getParam('symptom')
   const sort = getParam('sort') || 'published_newest'
 
-  const supabase = createPublicClient()
+  const {
+    vehicles,
+    incidents,
+    reportingRows,
+    errors: publicDataErrors,
+  } = await getCachedCasesPublicData()
 
-  const { data: vehicles, error: vehicleError } = await supabase
-    .from('vehicles')
-    .select(`
-      id,
-      public_case_id,
-      model,
-      model_year,
-      moderation_status,
-      published_at
-    `)
-    .order('published_at', { ascending: false })
+  const publicCases =
+    vehicles ?? []
 
-  const vehicleIds = vehicles?.map((vehicle) => vehicle.id) ?? []
-
-  const [
-    {
-      data: incidents,
-      error: incidentError,
-    },
-    {
-      data: reportingRows,
-      error: reportingError,
-    },
-  ] =
-    vehicleIds.length > 0
-      ? await Promise.all([
-          supabase
-            .from('incidents')
-            .select(`
-              id,
-              vehicle_id,
-              incident_number,
-              mileage,
-              incident_date,
-              door_positions,
-              symptoms,
-              occurrence_frequency,
-              repair_status,
-              moderation_status
-            `)
-            .in('vehicle_id', vehicleIds)
-            .order('incident_number', {
-              ascending: false,
-            }),
-
-          supabase.rpc(
-            'get_public_case_report_channels_batch',
-            {
-              p_vehicle_ids: vehicleIds,
-            }
-          ),
-        ])
-      : [
-          {
-            data: [],
-            error: null,
-          },
-          {
-            data: [],
-            error: null,
-          },
-        ]
-
-  const publicCases = vehicles ?? []
-  const publicIncidents = incidents ?? []
+  const publicIncidents =
+    incidents ?? []
 
   const reportingCountMap = new Map<
     string,
@@ -257,9 +202,11 @@ export default async function CasesPage({
   })
 
   const hasError =
-    vehicleError ||
-    incidentError ||
-    reportingError
+    Boolean(
+      publicDataErrors.vehicle ||
+      publicDataErrors.incident ||
+      publicDataErrors.reporting
+    )
 
   const hasFilters =
     Boolean(q) ||
@@ -671,9 +618,9 @@ export default async function CasesPage({
         {hasError && (
           <div className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
             公開案例讀取失敗：
-            {vehicleError?.message ??
-              incidentError?.message ??
-              reportingError?.message}
+            {publicDataErrors.vehicle ??
+              publicDataErrors.incident ??
+              publicDataErrors.reporting}
           </div>
         )}
 

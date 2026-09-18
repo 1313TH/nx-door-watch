@@ -694,9 +694,15 @@ export default async function CasesPage({
                         {vehicle.public_case_id}
                       </p>
 
-                      <h2 className="mt-1 text-2xl font-semibold text-gray-950">
-                        {vehicle.model_year} {vehicle.model}
-                      </h2>
+                      <div className="mt-1 flex flex-wrap items-baseline gap-2">
+                        <h2 className="text-2xl font-semibold text-gray-950">
+                          {vehicle.model_year} {vehicle.model}
+                        </h2>
+
+                        <span className="text-xs font-medium text-gray-400">
+                          · {vehicleIncidents.length} 次紀錄
+                        </span>
+                      </div>
 
                       {reportingCountForVehicle(vehicle.id) > 0 && (
                         <p className="mt-2 text-xs font-medium text-blue-700">

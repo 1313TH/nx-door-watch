@@ -347,10 +347,10 @@ export default async function HomePage() {
               <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-950">
-                    問題車門出現率
+                    各車門涉及案例比例
                   </h2>
                   <p className="mt-1 text-sm text-gray-500">
-                    公開案件中曾出現各車門問題的案件比例，可複選
+                    同一案例可能同時涉及多個車門，因此各項比例加總可能超過 100%。
                   </p>
                 </div>
 

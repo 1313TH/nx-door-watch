@@ -61,10 +61,40 @@ export default async function HomePage() {
   } = await serverSupabase.auth.getUser()
 
   let isAdmin = false
+  let adminReviewCount = 0
 
   if (user) {
     const { data } = await serverSupabase.rpc('is_admin')
     isAdmin = data === true
+
+    if (isAdmin) {
+      const {
+        count: pendingCaseCount,
+      } = await serverSupabase
+        .from('vehicles')
+        .select('id', {
+          count: 'exact',
+          head: true,
+        })
+        .eq('moderation_status', 'pending')
+        .is('deleted_at', null)
+        .is('archived_at', null)
+
+      const {
+        count: pendingFollowupCount,
+      } = await serverSupabase
+        .from('incidents')
+        .select('id', {
+          count: 'exact',
+          head: true,
+        })
+        .eq('moderation_status', 'pending')
+        .gt('incident_number', 1)
+
+      adminReviewCount =
+        (pendingCaseCount ?? 0) +
+        (pendingFollowupCount ?? 0)
+    }
   }
 
   const publicCases = vehicles ?? []
@@ -233,9 +263,17 @@ export default async function HomePage() {
                 {isAdmin && (
                   <Link
                     href="/admin"
-                    className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 transition hover:bg-gray-100"
+                    className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 transition hover:bg-gray-100"
                   >
-                    管理後台
+                    <span>管理後台</span>
+
+                    {adminReviewCount > 0 && (
+                      <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white">
+                        {adminReviewCount > 99
+                          ? '99+'
+                          : adminReviewCount}
+                      </span>
+                    )}
                   </Link>
                 )}
               <UserAvatar

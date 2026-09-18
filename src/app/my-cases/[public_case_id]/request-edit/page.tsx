@@ -342,8 +342,8 @@ export default async function RequestEditPage({
                 <input
                   name="model_year"
                   type="number"
-                  min="2022"
-                  max="2026"
+                  min="2015"
+                  max="2030"
                   required
                   defaultValue={vehicle.model_year}
                   className={inputClass}

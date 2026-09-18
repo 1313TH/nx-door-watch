@@ -695,6 +695,7 @@ export default async function HomePage() {
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             {[
               {
+                channel: 'lexus',
                 title: 'Lexus 原廠／客服',
                 description:
                   '適合先向 Lexus 客服、經銷商或服務廠建立正式案件並追蹤。',
@@ -702,6 +703,7 @@ export default async function HomePage() {
                   'https://www.lexus.com.tw/contact.aspx?s=faq&sid=1',
               },
               {
+                channel: 'vehicle_safety',
                 title: '車輛安全瑕疵通報',
                 description:
                   '若問題可能涉及車輛安全，可向交通主管機關提交正式瑕疵通報。',
@@ -709,6 +711,7 @@ export default async function HomePage() {
                   'https://www.car-safety.org.tw/car_safety/VehicleFailureNotification',
               },
               {
+                channel: 'consumer_protection',
                 title: '消費者保護線上申訴',
                 description:
                   '適合保固、維修費、待料或服務處理等消費爭議。',
@@ -716,6 +719,7 @@ export default async function HomePage() {
                   'https://appeal.cpc.ey.gov.tw/WWW/step_one.aspx',
               },
               {
+                channel: '1950',
                 title: '1950 消費者服務專線',
                 description:
                   '不確定該走哪個流程時，可先透過 1950 詢問處理方向。',
@@ -723,6 +727,7 @@ export default async function HomePage() {
                   'https://cpc.ey.gov.tw/Page/1DCF8AA4D223F601/ebc630d6-b774-4db5-abdc-5b52ed0963cc',
               },
               {
+                channel: 'motc_mailbox',
                 title: '交通部部長／民意信箱',
                 description:
                   '可向交通部提出完整陳情內容，並依官方流程提供附件。',
@@ -737,20 +742,29 @@ export default async function HomePage() {
                 rel="noopener noreferrer"
                 className="group rounded-3xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h3 className="font-semibold text-gray-950">
-                      {item.title}
-                    </h3>
+                <div className="flex items-center gap-5">
+                  <ReportingChannelIcon
+                    channel={item.channel}
+                    size={80}
+                  />
 
-                    <p className="mt-2 text-sm leading-6 text-gray-600">
-                      {item.description}
-                    </p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h3 className="font-semibold text-gray-950">
+                          {item.title}
+                        </h3>
+
+                        <p className="mt-2 text-sm leading-6 text-gray-600">
+                          {item.description}
+                        </p>
+                      </div>
+
+                      <span className="shrink-0 text-sm text-gray-400 transition group-hover:text-gray-900">
+                        ↗
+                      </span>
+                    </div>
                   </div>
-
-                  <span className="text-sm text-gray-400 transition group-hover:text-gray-900">
-                    ↗
-                  </span>
                 </div>
               </a>
             ))}

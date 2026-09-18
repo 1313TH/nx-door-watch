@@ -1,14 +1,19 @@
 type Props = {
   channel: string
+  size?: 40 | 80
 }
-
-const iconClass = 'h-5 w-5'
 
 export default function ReportingChannelIcon({
   channel,
+  size = 40,
 }: Props) {
   const wrapper =
-    'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-800'
+    size === 80
+      ? 'flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-800'
+      : 'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-800'
+
+  const iconClass =
+    size === 80 ? 'h-9 w-9' : 'h-5 w-5'
 
   if (channel === 'lexus') {
     return (
@@ -17,7 +22,13 @@ export default function ReportingChannelIcon({
         title="Lexus"
         aria-label="Lexus"
       >
-        <span className="text-[9px] font-bold tracking-[-0.04em] text-gray-900">
+        <span
+          className={
+            size === 80
+              ? 'text-sm font-bold tracking-[-0.04em] text-gray-900'
+              : 'text-[9px] font-bold tracking-[-0.04em] text-gray-900'
+          }
+        >
           LEXUS
         </span>
       </div>

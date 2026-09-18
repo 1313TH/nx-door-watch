@@ -75,7 +75,7 @@ export default function ReportGuidePage() {
       <div className="mx-auto max-w-5xl px-6 py-12">
         <Link
           href="/"
-          className="text-sm text-gray-500 hover:text-gray-900"
+          className="inline-flex items-center rounded-lg px-3 py-2 text-sm text-gray-500 transition hover:bg-gray-950 hover:text-white"
         >
           ← 回首頁
         </Link>

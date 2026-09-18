@@ -287,7 +287,7 @@ export default async function MyCaseDetailPage({
       <div className="mx-auto max-w-5xl px-6 py-12">
         <Link
           href="/my-cases"
-          className="text-sm text-gray-500 transition hover:text-gray-950"
+          className="inline-flex items-center rounded-lg px-3 py-2 text-sm text-gray-500 transition hover:bg-gray-950 hover:text-white"
         >
           ← 回我的案件
         </Link>

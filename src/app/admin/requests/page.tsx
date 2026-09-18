@@ -487,7 +487,7 @@ export default async function AdminRequestsPage({
       <div className="mx-auto max-w-6xl px-6 py-12">
         <Link
           href="/admin"
-          className="text-sm text-gray-500 hover:text-gray-900"
+          className="inline-flex items-center rounded-lg px-3 py-2 text-sm text-gray-500 transition hover:bg-gray-950 hover:text-white"
         >
           ← 回審核中心
         </Link>

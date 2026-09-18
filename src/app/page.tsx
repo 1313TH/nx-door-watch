@@ -630,7 +630,7 @@ export default async function HomePage() {
 
                 <Link
                   href="/cases"
-                  className="text-sm font-medium text-gray-700 transition hover:text-gray-950"
+                  className="inline-flex items-center rounded-lg px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-950 hover:text-white"
                 >
                   查看全部 →
                 </Link>

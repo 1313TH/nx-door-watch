@@ -107,7 +107,9 @@ export default async function RequestArchivePage({
   }
 
   if (
-    vehicle.moderation_status !== 'approved' ||
+    !['pending', 'approved'].includes(
+      vehicle.moderation_status
+    ) ||
     vehicle.archived_at
   ) {
     redirect(`/my-cases/${public_case_id}`)

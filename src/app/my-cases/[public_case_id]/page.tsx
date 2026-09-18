@@ -45,7 +45,7 @@ const reportChannelLabels: Record<string, string> = {
   lexus: 'Lexus 原廠／客服',
   vehicle_safety: '車輛安全瑕疵通報',
   consumer_protection: '消費者保護線上申訴',
-  '1950': '1950 消費者服務專線',
+  '1950': '1950 消費者諮詢專線',
   motc_mailbox: '交通部部長／民意信箱',
 }
 

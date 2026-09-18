@@ -2,8 +2,12 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import AdminOwnerContact from '@/components/admin/AdminOwnerContact'
-import AdminCaseReports from '@/components/admin/AdminCaseReports'
+import AdminOwnerContact, {
+  type OwnerContact,
+} from '@/components/admin/AdminOwnerContact'
+import AdminCaseReports, {
+  type AdminCaseReport,
+} from '@/components/admin/AdminCaseReports'
 
 const doorLabels: Record<string, string> = {
   front_left: '左前門',
@@ -56,6 +60,10 @@ async function moderateCase(formData: FormData) {
     redirect('/admin?error=invalid')
   }
 
+  if (action === 'needs_revision' && !note) {
+    redirect('/admin?error=note_required')
+  }
+
   const supabase = await createClient()
 
   const {
@@ -101,6 +109,10 @@ async function moderateIncident(formData: FormData) {
     !['approved', 'needs_revision', 'rejected'].includes(action)
   ) {
     redirect('/admin?error=invalid_incident')
+  }
+
+  if (action === 'needs_revision' && !note) {
+    redirect('/admin?error=note_required')
   }
 
   const supabase = await createClient()
@@ -319,6 +331,100 @@ export default async function AdminPage({
       approvedVehicleMap.has(incident.vehicle_id)
     )
 
+  // =======================================================
+  // Admin 卡片共用資料：整頁批次抓取，避免每張卡 N+1
+  // =======================================================
+
+  const adminVehicleIds = [
+    ...new Set([
+      ...(pendingVehicles ?? []).map(
+        (vehicle) => vehicle.id
+      ),
+      ...(approvedVehiclesWithPendingIncidents ?? []).map(
+        (vehicle) => vehicle.id
+      ),
+    ]),
+  ]
+
+  const {
+    data: ownerContacts,
+    error: ownerContactError,
+  } =
+    adminVehicleIds.length > 0
+      ? await supabase.rpc(
+          'get_admin_case_owner_contacts',
+          {
+            p_vehicle_ids: adminVehicleIds,
+          }
+        )
+      : { data: [], error: null }
+
+  const {
+    data: adminReports,
+    error: adminReportsError,
+  } =
+    adminVehicleIds.length > 0
+      ? await supabase
+          .from('case_reports')
+          .select(`
+            id,
+            vehicle_id,
+            channel,
+            status,
+            reported_at,
+            reference_number,
+            note
+          `)
+          .in('vehicle_id', adminVehicleIds)
+          .in('status', ['submitted', 'completed'])
+          .order('reported_at', { ascending: false })
+      : { data: [], error: null }
+
+  if (ownerContactError) {
+    console.error(
+      'admin owner batch error:',
+      ownerContactError
+    )
+  }
+
+  if (adminReportsError) {
+    console.error(
+      'admin reports batch error:',
+      adminReportsError
+    )
+  }
+
+  const ownerContactMap = new Map<
+    string,
+    OwnerContact
+  >(
+    ((ownerContacts ?? []) as OwnerContact[]).map(
+      (owner) => [owner.vehicle_id, owner]
+    )
+  )
+
+  const reportMap = new Map<
+    string,
+    AdminCaseReport[]
+  >()
+
+  for (
+    const report of
+    (adminReports ?? []) as AdminCaseReport[]
+  ) {
+    if (!report.vehicle_id) continue
+
+    const current =
+      reportMap.get(report.vehicle_id) ?? []
+
+    current.push(report)
+
+    reportMap.set(
+      report.vehicle_id,
+      current
+    )
+  }
+
   const hasError =
     vehicleError ||
     newCaseIncidentError ||
@@ -345,6 +451,8 @@ export default async function AdminPage({
     invalid_incident: '送出的後續紀錄審核資料不完整，請重新操作。',
     moderation: '案件審核失敗，請稍後再試。',
     incident_moderation: '後續紀錄審核失敗，請稍後再試。',
+    note_required:
+      '要求車主修改時，請填寫具體修改原因，讓車主知道需要修正哪些內容。',
     stale:
       '這筆紀錄的狀態已經改變，可能已被車主修改或撤回。頁面已重新載入最新狀態，請確認後再操作。',
   }
@@ -520,12 +628,14 @@ export default async function AdminPage({
 
                             <AdminOwnerContact
                               vehicleId={vehicle.id}
+                              owner={ownerContactMap.get(vehicle.id) ?? null}
                               className="mt-3 lg:absolute lg:right-6 lg:top-14 lg:mt-0"
                             />
 
 
                             <AdminCaseReports
                               vehicleId={vehicle.id}
+                              reports={reportMap.get(vehicle.id) ?? []}
                             />
                             <p className="mt-2 text-sm font-medium text-blue-700">
                               第 {incident.incident_number} 次紀錄
@@ -766,12 +876,14 @@ export default async function AdminPage({
 
                             <AdminOwnerContact
                               vehicleId={vehicle.id}
+                              owner={ownerContactMap.get(vehicle.id) ?? null}
                               className="mt-3 lg:absolute lg:right-6 lg:top-14 lg:mt-0"
                             />
 
 
                             <AdminCaseReports
                               vehicleId={vehicle.id}
+                              reports={reportMap.get(vehicle.id) ?? []}
                             />
                             <p className="mt-2 text-sm text-gray-500">
                               提交日期：

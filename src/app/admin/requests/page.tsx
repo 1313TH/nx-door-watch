@@ -2,8 +2,12 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import AdminOwnerContact from '@/components/admin/AdminOwnerContact'
-import AdminCaseReports from '@/components/admin/AdminCaseReports'
+import AdminOwnerContact, {
+  type OwnerContact,
+} from '@/components/admin/AdminOwnerContact'
+import AdminCaseReports, {
+  type AdminCaseReport,
+} from '@/components/admin/AdminCaseReports'
 
 const doorLabels: Record<string, string> = {
   front_left: '左前門',
@@ -87,6 +91,12 @@ async function reviewRevision(formData: FormData) {
     )
   ) {
     redirect('/admin/requests?error=revision')
+  }
+
+  if (action === 'needs_revision' && !note) {
+    redirect(
+      '/admin/requests?error=note_required'
+    )
   }
 
   const { error } = await supabase.rpc(
@@ -356,12 +366,102 @@ export default async function AdminRequestsPage({
       ascending: false,
     })
 
+  const adminVehicleIds = [
+    ...new Set([
+      ...vehicleIds,
+      ...(archivedVehicles ?? []).map(
+        (vehicle) => vehicle.id
+      ),
+    ]),
+  ]
+
+  const {
+    data: ownerContacts,
+    error: ownerContactError,
+  } =
+    adminVehicleIds.length > 0
+      ? await supabase.rpc(
+          'get_admin_case_owner_contacts',
+          {
+            p_vehicle_ids: adminVehicleIds,
+          }
+        )
+      : { data: [], error: null }
+
+  const {
+    data: adminReports,
+    error: adminReportsError,
+  } =
+    adminVehicleIds.length > 0
+      ? await supabase
+          .from('case_reports')
+          .select(`
+            id,
+            vehicle_id,
+            channel,
+            status,
+            reported_at,
+            reference_number,
+            note
+          `)
+          .in('vehicle_id', adminVehicleIds)
+          .in('status', ['submitted', 'completed'])
+          .order('reported_at', { ascending: false })
+      : { data: [], error: null }
+
+  if (ownerContactError) {
+    console.error(
+      'admin requests owner batch error:',
+      ownerContactError
+    )
+  }
+
+  if (adminReportsError) {
+    console.error(
+      'admin requests reports batch error:',
+      adminReportsError
+    )
+  }
+
+  const ownerContactMap = new Map<
+    string,
+    OwnerContact
+  >(
+    ((ownerContacts ?? []) as OwnerContact[]).map(
+      (owner) => [owner.vehicle_id, owner]
+    )
+  )
+
+  const reportMap = new Map<
+    string,
+    AdminCaseReport[]
+  >()
+
+  for (
+    const report of
+    (adminReports ?? []) as AdminCaseReport[]
+  ) {
+    if (!report.vehicle_id) continue
+
+    const current =
+      reportMap.get(report.vehicle_id) ?? []
+
+    current.push(report)
+
+    reportMap.set(
+      report.vehicle_id,
+      current
+    )
+  }
+
   const hasError =
     revisionError ||
     archiveError ||
     vehicleError ||
     currentIncidentError ||
-    archivedError
+    archivedError ||
+    ownerContactError ||
+    adminReportsError
 
   const doneMessages: Record<string, string> = {
     revision_approve:
@@ -414,7 +514,9 @@ export default async function AdminRequestsPage({
 
         {query.error && (
           <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            操作失敗，資料狀態可能已改變，請重新整理後再試。
+            {query.error === 'note_required'
+              ? '要求車主修改時，請填寫具體修改原因。'
+              : '操作失敗，資料狀態可能已改變，請重新整理後再試。'}
           </div>
         )}
 
@@ -715,12 +817,14 @@ export default async function AdminRequestsPage({
                       <>
                       <AdminOwnerContact
                         vehicleId={vehicle.id}
+                        owner={ownerContactMap.get(vehicle.id) ?? null}
                         className="mt-3 lg:absolute lg:right-6 lg:top-14 lg:mt-0"
                       />
 
 
                       <AdminCaseReports
                         vehicleId={vehicle.id}
+                        reports={reportMap.get(vehicle.id) ?? []}
                       />
               </>
             )}
@@ -885,12 +989,14 @@ export default async function AdminRequestsPage({
                       <>
                       <AdminOwnerContact
                         vehicleId={vehicle.id}
+                        owner={ownerContactMap.get(vehicle.id) ?? null}
                         className="mt-3 lg:absolute lg:right-6 lg:top-14 lg:mt-0"
                       />
 
 
                       <AdminCaseReports
                         vehicleId={vehicle.id}
+                        reports={reportMap.get(vehicle.id) ?? []}
                       />
                       </>
                     )}
@@ -976,12 +1082,14 @@ export default async function AdminRequestsPage({
                       <>
                       <AdminOwnerContact
                         vehicleId={vehicle.id}
+                        owner={ownerContactMap.get(vehicle.id) ?? null}
                         className="mt-3 lg:absolute lg:right-6 lg:top-14 lg:mt-0"
                       />
 
 
                       <AdminCaseReports
                         vehicleId={vehicle.id}
+                        reports={reportMap.get(vehicle.id) ?? []}
                       />
                       </>
                     )}

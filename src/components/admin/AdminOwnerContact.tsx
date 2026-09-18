@@ -1,18 +1,20 @@
 import { createClient } from '@/lib/supabase/server'
 
-type Props = {
-  vehicleId: string
-  className?: string
-  emailClickable?: boolean
-}
-
-type OwnerContact = {
+export type OwnerContact = {
   vehicle_id: string
   owner_id: string
   email: string | null
   full_name: string | null
   avatar_url: string | null
 }
+
+type Props = {
+  vehicleId: string
+  className?: string
+  emailClickable?: boolean
+  owner?: OwnerContact | null
+}
+
 
 function getInitials(
   name: string | null,
@@ -34,26 +36,31 @@ export default async function AdminOwnerContact({
   vehicleId,
   className = '',
   emailClickable = true,
+  owner: providedOwner,
 }: Props) {
-  const supabase = await createClient()
+  let owner = providedOwner
 
-  const { data, error } = await supabase.rpc(
-    'get_admin_case_owner_contacts',
-    {
-      p_vehicle_ids: [vehicleId],
-    }
-  )
+  if (providedOwner === undefined) {
+    const supabase = await createClient()
 
-  if (error) {
-    console.error(
-      'get_admin_case_owner_contacts error:',
-      error
+    const { data, error } = await supabase.rpc(
+      'get_admin_case_owner_contacts',
+      {
+        p_vehicle_ids: [vehicleId],
+      }
     )
-    return null
-  }
 
-  const owner =
-    (data?.[0] ?? null) as OwnerContact | null
+    if (error) {
+      console.error(
+        'get_admin_case_owner_contacts error:',
+        error
+      )
+      return null
+    }
+
+    owner =
+      (data?.[0] ?? null) as OwnerContact | null
+  }
 
   if (!owner) return null
 

@@ -91,9 +91,32 @@ export default async function HomePage() {
         .eq('moderation_status', 'pending')
         .gt('incident_number', 1)
 
+      const {
+        count: pendingRevisionCount,
+      } = await serverSupabase
+        .from('case_revisions')
+        .select('id', {
+          count: 'exact',
+          head: true,
+        })
+        .eq('target_type', 'vehicle')
+        .eq('status', 'pending')
+
+      const {
+        count: pendingArchiveCount,
+      } = await serverSupabase
+        .from('case_archive_requests')
+        .select('id', {
+          count: 'exact',
+          head: true,
+        })
+        .eq('status', 'pending')
+
       adminReviewCount =
         (pendingCaseCount ?? 0) +
-        (pendingFollowupCount ?? 0)
+        (pendingFollowupCount ?? 0) +
+        (pendingRevisionCount ?? 0) +
+        (pendingArchiveCount ?? 0)
     }
   }
 
@@ -819,7 +842,7 @@ export default async function HomePage() {
 
         <footer className="mt-16 border-t border-gray-200 py-8 text-sm leading-6 text-gray-500">
           NX Door Watch 為車主案例資訊整理平台。
-          公開內容來自車主回報並經人工審核，
+          公開內容來自車主回報，案件會先以匿名方式公開並持續接受人工後續審核；
           個別案例不代表所有 Lexus NX 車輛皆會發生相同狀況。
         </footer>
       </div>

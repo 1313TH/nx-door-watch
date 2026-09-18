@@ -1,42 +1,60 @@
 import { createClient } from '@/lib/supabase/server'
 import ReportingChannelIcon from '@/components/ReportingChannelIcon'
 
+export type AdminCaseReport = {
+  id: string
+  vehicle_id?: string
+  channel: string
+  status: string
+  reported_at: string | null
+  reference_number: string | null
+  note: string | null
+}
+
 type Props = {
   vehicleId: string
   compact?: boolean
+  reports?: AdminCaseReport[] | null
 }
 
 const channelLabels: Record<string, string> = {
   lexus: 'Lexus 原廠／客服',
   vehicle_safety: '車輛安全瑕疵通報',
   consumer_protection: '消費者保護線上申訴',
-  '1950': '1950 消費者服務專線',
+  '1950': '1950 消費者諮詢專線',
   motc_mailbox: '交通部部長／民意信箱',
 }
 
 export default async function AdminCaseReports({
   vehicleId,
   compact = false,
+  reports: providedReports,
 }: Props) {
-  const supabase = await createClient()
+  let reports = providedReports
 
-  const { data: reports, error } = await supabase
-    .from('case_reports')
-    .select(`
-      id,
-      channel,
-      status,
-      reported_at,
-      reference_number,
-      note
-    `)
-    .eq('vehicle_id', vehicleId)
-    .in('status', ['submitted', 'completed'])
-    .order('reported_at', { ascending: false })
+  if (providedReports === undefined) {
+    const supabase = await createClient()
 
-  if (error) {
-    console.error('AdminCaseReports error:', error)
-    return null
+    const { data, error } = await supabase
+      .from('case_reports')
+      .select(`
+        id,
+        channel,
+        status,
+        reported_at,
+        reference_number,
+        note
+      `)
+      .eq('vehicle_id', vehicleId)
+      .in('status', ['submitted', 'completed'])
+      .order('reported_at', { ascending: false })
+
+    if (error) {
+      console.error('AdminCaseReports error:', error)
+      return null
+    }
+
+    reports = data
   }
 
   if (!reports || reports.length === 0) {
@@ -62,7 +80,7 @@ export default async function AdminCaseReports({
     <div className="mt-5 border-t border-gray-100 pt-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm font-semibold text-gray-900">
-          正式反映紀錄
+          反映／諮詢紀錄
         </p>
 
         <span className="text-xs text-gray-500">
@@ -87,8 +105,16 @@ export default async function AdminCaseReports({
                         report.channel}
                     </p>
 
-                    <p className="mt-1 text-xs text-green-700">
-                      ✓ 已正式反映
+                    <p
+                      className={
+                        report.channel === '1950'
+                          ? 'mt-1 text-xs text-blue-700'
+                          : 'mt-1 text-xs text-green-700'
+                      }
+                    >
+                      {report.channel === '1950'
+                        ? '✓ 已完成諮詢'
+                        : '✓ 已正式反映'}
                     </p>
                   </div>
 

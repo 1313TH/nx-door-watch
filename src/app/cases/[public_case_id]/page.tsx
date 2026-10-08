@@ -90,6 +90,8 @@ async function archiveCaseFromDetail(formData: FormData) {
 
 export default async function CaseDetailPage({
   params,
+}: {
+  params: Promise<{ public_case_id: string }>
 }) {
   const { public_case_id } = await params
   const publicData = await getCachedPublicCaseDetail(public_case_id)

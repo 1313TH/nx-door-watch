@@ -182,6 +182,21 @@ export default async function MyCaseDetailPage({
     notFound()
   }
 
+  const { data: pendingArchiveRequest, error: archiveRequestError } =
+    await supabase
+      .from('case_archive_requests')
+      .select('id, status')
+      .eq('vehicle_id', vehicle.id)
+      .eq('status', 'pending')
+      .maybeSingle()
+
+  if (archiveRequestError) {
+    console.error(
+      'case_archive_requests lookup error:',
+      archiveRequestError
+    )
+  }
+
   const {
     data: caseFeedbackRows,
     error: caseFeedbackError,
@@ -353,15 +368,36 @@ export default async function MyCaseDetailPage({
               </p>
             </div>
 
-            <span
-              className={`rounded-full px-3 py-1 text-sm font-medium ${moderationStyle(
-                vehicle.moderation_status
-              )}`}
-            >
-              {moderationLabels[vehicle.moderation_status] ??
-                vehicle.moderation_status}
-            </span>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <span
+                className={`rounded-full px-3 py-1 text-sm font-medium ${moderationStyle(
+                  vehicle.moderation_status
+                )}`}
+              >
+                {moderationLabels[vehicle.moderation_status] ??
+                  vehicle.moderation_status}
+              </span>
+
+              {pendingArchiveRequest && (
+                <span className="rounded-full bg-amber-50 px-3 py-1 text-sm font-medium text-amber-800">
+                  下架申請審核中
+                </span>
+              )}
+            </div>
           </div>
+
+          {pendingArchiveRequest && (
+            <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+              <p className="font-semibold text-amber-950">
+                下架申請審核中
+              </p>
+
+              <p className="mt-2 text-sm leading-6 text-amber-900">
+                你已提交下架申請，目前等待管理員審核。
+                審核完成前，此案件仍會維持公開。
+              </p>
+            </div>
+          )}
 
           {vehicle.moderation_status ===
             'needs_revision' && (

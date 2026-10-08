@@ -1,11 +1,9 @@
 import Link from 'next/link'
-import { LogoutButton } from '@/components/logout-button'
-import { UserAvatar } from '@/components/user-avatar'
-import { createClient as createServerClient } from '@/lib/supabase/server'
 import { getCachedHomePublicData } from '@/lib/public-data'
 import ReportingChannelIcon from '@/components/ReportingChannelIcon'
 import ActionMetricIcon from '@/components/ActionMetricIcon'
 import AdminOwnerContact from '@/components/admin/AdminOwnerContact'
+import HomeHeader from '@/components/HomeHeader'
 
 const doorLabels: Record<string, string> = {
   front_left: '左前門',
@@ -22,8 +20,6 @@ const symptomLabels: Record<string, string> = {
   abnormal_sound: '異常聲響',
   other: '其他',
 }
-
-export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
   // 公開資料與登入狀態彼此獨立，並行取得避免首頁多一次等待。
@@ -44,58 +40,6 @@ export default async function HomePage() {
     errors: publicDataErrors,
   } = publicData
 
-  const {
-    data: { user },
-  } = authData
-
-  let isAdmin = false
-  let serverSupabase: Awaited<ReturnType<typeof createServerClient>> | null = null
-  let adminReviewCount = 0
-
-  if (user) {
-    serverSupabase = await createServerClient()
-    const { data } = await serverSupabase.rpc('is_admin')
-    isAdmin = data === true
-
-    if (isAdmin) {
-      const [
-        { count: pendingCaseCount },
-        { count: pendingFollowupCount },
-        { count: pendingRevisionCount },
-        { count: pendingArchiveCount },
-      ] = await Promise.all([
-        serverSupabase!
-          .from('vehicles')
-          .select('id', { count: 'exact', head: true })
-          .eq('moderation_status', 'pending')
-          .is('deleted_at', null)
-          .is('archived_at', null),
-
-        serverSupabase!
-          .from('incidents')
-          .select('id', { count: 'exact', head: true })
-          .eq('moderation_status', 'pending')
-          .gt('incident_number', 1),
-
-        serverSupabase!
-          .from('case_revisions')
-          .select('id', { count: 'exact', head: true })
-          .eq('target_type', 'vehicle')
-          .eq('status', 'pending'),
-
-        serverSupabase!
-          .from('case_archive_requests')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'pending'),
-      ])
-
-      adminReviewCount =
-        (pendingCaseCount ?? 0) +
-        (pendingFollowupCount ?? 0) +
-        (pendingRevisionCount ?? 0) +
-        (pendingArchiveCount ?? 0)
-    }
-  }
 
   const publicCases = vehicles ?? []
   const publicIncidents = incidents ?? []
@@ -218,56 +162,8 @@ export default async function HomePage() {
             </h1>
           </div>
 
-          <nav className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/cases"
-              className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 transition hover:bg-gray-100"
-            >
-              公開案例
-            </Link>
+          <HomeHeader />
 
-            {user ? (
-              <>
-                <Link
-                  href="/my-cases"
-                  className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 transition hover:bg-gray-100"
-                >
-                  我的案件
-                </Link>
-
-                {isAdmin && (
-                  <Link
-                    href="/admin"
-                    className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 transition hover:bg-gray-100"
-                  >
-                    <span>管理後台</span>
-
-                    {adminReviewCount > 0 && (
-                      <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white">
-                        {adminReviewCount > 99
-                          ? '99+'
-                          : adminReviewCount}
-                      </span>
-                    )}
-                  </Link>
-                )}
-              <UserAvatar
-                email={user.email}
-                avatarUrl={user.user_metadata?.avatar_url}
-                fullName={user.user_metadata?.full_name}
-              />
-
-              <LogoutButton />
-              </>
-            ) : (
-              <Link
-                href="/login"
-                className="rounded-xl bg-gray-950 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800"
-              >
-                登入 / 回報案例
-              </Link>
-            )}
-          </nav>
         </header>
 
         <section className="mt-14 grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
@@ -296,11 +192,7 @@ export default async function HomePage() {
               </Link>
 
               <Link
-                href={
-                  user
-                    ? '/my-cases/new'
-                    : '/login?next=%2Fmy-cases%2Fnew'
-                }
+                href="/my-cases/new"
                 className="rounded-xl border border-gray-300 bg-white px-5 py-3 text-sm font-medium text-gray-800 transition hover:bg-gray-100"
               >
                 回報我的案例
@@ -666,13 +558,11 @@ export default async function HomePage() {
                             </>
                           )}
 
-                          {isAdmin && (
-                            <AdminOwnerContact
+                          <AdminOwnerContact
                               vehicleId={vehicle.id}
                               emailClickable={false}
                               className="hidden xl:inline-flex"
                             />
-                          )}
 
                           <span className="text-sm font-medium text-gray-500 transition group-hover:text-gray-950">
                             查看 →

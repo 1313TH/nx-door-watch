@@ -38,7 +38,7 @@ const repairLabels: Record<string, string> = {
   other: '其他',
 }
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 300
 
 export default async function CasesPage({
   searchParams,

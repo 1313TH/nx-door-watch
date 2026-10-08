@@ -67,6 +67,20 @@ export default async function MyCasesPage() {
           .in('status', ['submitted', 'completed'])
       : { data: [] }
 
+  const { data: archiveRequests } =
+    vehicleIds.length > 0
+      ? await supabase
+          .from('case_archive_requests')
+          .select('vehicle_id, status')
+          .in('vehicle_id', vehicleIds)
+          .eq('status', 'pending')
+      : { data: [] }
+
+  const hasPendingArchiveRequest = (vehicleId: string) =>
+    (archiveRequests ?? []).some(
+      (request) => request.vehicle_id === vehicleId
+    )
+
   const incidentCountForVehicle = (vehicleId: string) =>
     (incidents ?? []).filter(
       (incident) => incident.vehicle_id === vehicleId
@@ -216,12 +230,18 @@ export default async function MyCasesPage() {
                         申請修改
                       </Link>
 
-                      <Link
-                        href={`/my-cases/${vehicle.public_case_id}/request-archive`}
-                        className="rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-50"
-                      >
-                        申請下架
-                      </Link>
+                      {hasPendingArchiveRequest(vehicle.id) ? (
+                        <span className="inline-flex items-center rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800">
+                          下架申請審核中
+                        </span>
+                      ) : (
+                        <Link
+                          href={`/my-cases/${vehicle.public_case_id}/request-archive`}
+                          className="rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-700 hover:bg-red-50"
+                        >
+                          申請下架
+                        </Link>
+                      )}
                     </>
                   )}
 

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { revalidatePath, updateTag } from 'next/cache'
+import { createClient } from '@/lib/supabase/server'
 import AdminArchiveCaseGate from '@/components/admin/AdminArchiveCaseGate'
 import CaseBackLink from '@/components/CaseBackLink'
 import { getCachedPublicCaseDetail } from '@/lib/public-data'
@@ -89,38 +90,9 @@ async function archiveCaseFromDetail(formData: FormData) {
 
 export default async function CaseDetailPage({
   params,
-  searchParams,
-}: {
-  params: Promise<{ public_case_id: string }>
 }) {
   const { public_case_id } = await params
-  const { from } = await searchParams
-
-  const backHref = from === 'home' ? '/' : '/cases'
-  const backLabel =
-    from === 'home'
-      ? '← 回首頁'
-      : '← 回公開案例'
-
-  // 公開案例資料與登入／管理員判斷並行，避免公開頁面多一次等待。
-  const [publicData, authData] = await Promise.all([
-    getCachedPublicCaseDetail(public_case_id),
-    (async () => {
-      const supabase = await createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        return { isAdmin: false }
-      }
-
-      const { data: adminStatus } =
-        await supabase.rpc('is_admin')
-
-      return { isAdmin: adminStatus === true }
-    })(),
-  ])
+  const publicData = await getCachedPublicCaseDetail(public_case_id)
 
   const {
     vehicle,

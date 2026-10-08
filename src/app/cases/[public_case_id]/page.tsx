@@ -87,6 +87,8 @@ async function archiveCaseFromDetail(formData: FormData) {
   redirect('/admin?done=archived')
 }
 
+export const revalidate = 300
+
 export default async function CaseDetailPage({
   params,
 }: {

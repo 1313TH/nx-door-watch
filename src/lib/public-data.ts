@@ -253,8 +253,7 @@ export const getCachedPublicCaseDetail =
           )
           .maybeSingle()
 
-      const vehicle =
-        vehicleResult.data
+      const vehicle = vehicleResult.data
 
       if (!vehicle) {
         return {
@@ -262,18 +261,14 @@ export const getCachedPublicCaseDetail =
           incidents: [],
           reportChannels: [],
           errors: {
-            vehicle:
-              resultErrorMessage(vehicleResult),
+            vehicle: resultErrorMessage(vehicleResult),
             incident: null,
             reporting: null,
           },
         }
       }
 
-      const [
-        incidentResult,
-        reportingResult,
-      ] = await Promise.all([
+      const [incidentResult, reportingResult] = await Promise.all([
         supabase
           .from('incidents')
           .select(`

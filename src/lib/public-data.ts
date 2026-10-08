@@ -23,7 +23,9 @@ function resultErrorMessage(
   return error?.message ?? null
 }
 
-const CACHE_SECONDS = 30
+// Public pages are explicitly invalidated by updateTag after mutations.
+// Keep the warm cache longer so ordinary visits do not repeatedly hit Supabase.
+const CACHE_SECONDS = 300
 
 export const getCachedHomePublicData = unstable_cache(
   async () => {

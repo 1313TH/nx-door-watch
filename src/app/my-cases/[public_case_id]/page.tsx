@@ -140,6 +140,8 @@ export default async function MyCaseDetailPage({
     withdrawn?: string
     resubmitted?: string
     case_updated?: string
+    archive_requested?: string
+    archive_exists?: string
     error?: string
   }>
 }) {
@@ -313,6 +315,18 @@ export default async function MyCaseDetailPage({
         {query.resubmitted === '1' && (
           <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
             修改完成，這筆紀錄已重新公開並等待管理員後續審核。
+          </div>
+        )}
+
+        {query.archive_requested === '1' && (
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            下架申請已送出，目前正在等待管理員審核。審核完成前，案件仍會維持公開。
+          </div>
+        )}
+
+        {query.archive_exists === '1' && (
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            這個案件已經有一筆下架申請正在審核中，請等待管理員處理。
           </div>
         )}
 

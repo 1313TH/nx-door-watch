@@ -1,8 +1,8 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { revalidatePath, updateTag } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
-import AdminArchiveCaseForm from '@/components/admin/AdminArchiveCaseForm'
+import AdminArchiveCaseGate from '@/components/admin/AdminArchiveCaseGate'
+import CaseBackLink from '@/components/CaseBackLink'
 import { getCachedPublicCaseDetail } from '@/lib/public-data'
 
 const doorLabels: Record<string, string> = {
@@ -87,14 +87,11 @@ async function archiveCaseFromDetail(formData: FormData) {
   redirect('/admin?done=archived')
 }
 
-export const dynamic = 'force-dynamic'
-
 export default async function CaseDetailPage({
   params,
   searchParams,
 }: {
   params: Promise<{ public_case_id: string }>
-  searchParams: Promise<{ from?: string }>
 }) {
   const { public_case_id } = await params
   const { from } = await searchParams
@@ -153,17 +150,10 @@ export default async function CaseDetailPage({
     )
   )
 
-  const { isAdmin } = authData
-
   return (
     <main className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-5xl px-6 py-12">
-        <Link
-          href={backHref}
-          className="inline-flex items-center rounded-lg px-3 py-2 text-sm text-gray-500 transition hover:bg-gray-950 hover:text-white"
-        >
-          {backLabel}
-        </Link>
+        <CaseBackLink />
 
         <header className="mt-8 rounded-3xl border border-gray-200 bg-white p-7 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-5">
@@ -196,12 +186,10 @@ export default async function CaseDetailPage({
           </div>
         </header>
 
-        {isAdmin && (
-          <AdminArchiveCaseForm
-            vehicleId={vehicle.id}
-            action={archiveCaseFromDetail}
-          />
-        )}
+        <AdminArchiveCaseGate
+          vehicleId={vehicle.id}
+          action={archiveCaseFromDetail}
+        />
 
         {uniqueReportChannels.length > 0 && (
           <section className="mt-6 rounded-3xl border border-blue-100 bg-blue-50/60 p-6">

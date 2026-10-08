@@ -26,7 +26,15 @@ const symptomLabels: Record<string, string> = {
 export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
-  // 匿名公開資料使用短時間快取
+  // 公開資料與登入狀態彼此獨立，並行取得避免首頁多一次等待。
+  const [publicData, authData] = await Promise.all([
+    getCachedHomePublicData(),
+    (async () => {
+      const serverSupabase = await createServerClient()
+      return serverSupabase.auth.getUser()
+    })(),
+  ])
+
   const {
     vehicles,
     incidents,
@@ -34,66 +42,52 @@ export default async function HomePage() {
     reportingSummaryRows,
     reportingChannelRows,
     errors: publicDataErrors,
-  } = await getCachedHomePublicData()
-
-  // 登入狀態只用來決定導航按鈕
-  const serverSupabase = await createServerClient()
+  } = publicData
 
   const {
     data: { user },
-  } = await serverSupabase.auth.getUser()
+  } = authData
 
   let isAdmin = false
+  let serverSupabase: Awaited<ReturnType<typeof createServerClient>> | null = null
   let adminReviewCount = 0
 
   if (user) {
+    serverSupabase = await createServerClient()
     const { data } = await serverSupabase.rpc('is_admin')
     isAdmin = data === true
 
     if (isAdmin) {
-      const {
-        count: pendingCaseCount,
-      } = await serverSupabase
-        .from('vehicles')
-        .select('id', {
-          count: 'exact',
-          head: true,
-        })
-        .eq('moderation_status', 'pending')
-        .is('deleted_at', null)
-        .is('archived_at', null)
+      const [
+        { count: pendingCaseCount },
+        { count: pendingFollowupCount },
+        { count: pendingRevisionCount },
+        { count: pendingArchiveCount },
+      ] = await Promise.all([
+        serverSupabase!
+          .from('vehicles')
+          .select('id', { count: 'exact', head: true })
+          .eq('moderation_status', 'pending')
+          .is('deleted_at', null)
+          .is('archived_at', null),
 
-      const {
-        count: pendingFollowupCount,
-      } = await serverSupabase
-        .from('incidents')
-        .select('id', {
-          count: 'exact',
-          head: true,
-        })
-        .eq('moderation_status', 'pending')
-        .gt('incident_number', 1)
+        serverSupabase!
+          .from('incidents')
+          .select('id', { count: 'exact', head: true })
+          .eq('moderation_status', 'pending')
+          .gt('incident_number', 1),
 
-      const {
-        count: pendingRevisionCount,
-      } = await serverSupabase
-        .from('case_revisions')
-        .select('id', {
-          count: 'exact',
-          head: true,
-        })
-        .eq('target_type', 'vehicle')
-        .eq('status', 'pending')
+        serverSupabase!
+          .from('case_revisions')
+          .select('id', { count: 'exact', head: true })
+          .eq('target_type', 'vehicle')
+          .eq('status', 'pending'),
 
-      const {
-        count: pendingArchiveCount,
-      } = await serverSupabase
-        .from('case_archive_requests')
-        .select('id', {
-          count: 'exact',
-          head: true,
-        })
-        .eq('status', 'pending')
+        serverSupabase!
+          .from('case_archive_requests')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'pending'),
+      ])
 
       adminReviewCount =
         (pendingCaseCount ?? 0) +

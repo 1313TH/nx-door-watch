@@ -1,4 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 export type OwnerContact = {
   vehicle_id: string
@@ -12,101 +15,64 @@ type Props = {
   vehicleId: string
   className?: string
   emailClickable?: boolean
-  owner?: OwnerContact | null
 }
 
-
-function getInitials(
-  name: string | null,
-  email: string | null
-) {
+function getInitials(name: string | null, email: string | null) {
   if (name?.trim()) {
-    return name
-      .trim()
-      .split(/\s+/)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase())
-      .join('')
+    return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('')
   }
-
   return email?.[0]?.toUpperCase() ?? '?'
 }
 
-export default async function AdminOwnerContact({
+export default function AdminOwnerContact({
   vehicleId,
   className = '',
   emailClickable = true,
-  owner: providedOwner,
 }: Props) {
-  let owner = providedOwner
+  const [owner, setOwner] = useState<OwnerContact | null>(null)
 
-  if (providedOwner === undefined) {
-    const supabase = await createClient()
+  useEffect(() => {
+    let active = true
+    const supabase = createClient()
 
-    const { data, error } = await supabase.rpc(
-      'get_admin_case_owner_contacts',
-      {
+    async function load() {
+      const { data: adminStatus } = await supabase.rpc('is_admin')
+      if (adminStatus !== true) return
+
+      const { data, error } = await supabase.rpc('get_admin_case_owner_contacts', {
         p_vehicle_ids: [vehicleId],
-      }
-    )
+      })
 
-    if (error) {
-      console.error(
-        'get_admin_case_owner_contacts error:',
-        error
-      )
-      return null
+      if (!active || error) return
+      setOwner((data?.[0] ?? null) as OwnerContact | null)
     }
 
-    owner =
-      (data?.[0] ?? null) as OwnerContact | null
-  }
+    void load()
+    return () => {
+      active = false
+    }
+  }, [vehicleId])
 
   if (!owner) return null
 
-  const displayName =
-    owner.full_name?.trim() ||
-    owner.email ||
-    '未命名帳號'
+  const displayName = owner.full_name?.trim() || owner.email || '未命名帳號'
 
   return (
-    <div
-      className={`inline-flex max-w-[260px] items-center gap-2.5 ${className}`}
-    >
+    <div className={`inline-flex max-w-[260px] items-center gap-2.5 ${className}`}>
       {owner.avatar_url ? (
-        <img
-          src={owner.avatar_url}
-          alt=""
-          referrerPolicy="no-referrer"
-          className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-gray-200"
-        />
+        <img src={owner.avatar_url} alt="" referrerPolicy="no-referrer" className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-gray-200" />
       ) : (
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-900 text-xs font-semibold text-white">
-          {getInitials(
-            owner.full_name,
-            owner.email
-          )}
+          {getInitials(owner.full_name, owner.email)}
         </div>
       )}
-
       <div className="min-w-0 text-left">
-        <p className="truncate text-sm font-semibold text-gray-900">
-          {displayName}
-        </p>
-
-        {owner.email &&
-          (emailClickable ? (
-            <a
-              href={`mailto:${owner.email}`}
-              className="block truncate text-xs text-blue-600 hover:underline"
-            >
-              {owner.email}
-            </a>
-          ) : (
-            <p className="truncate text-xs text-blue-600">
-              {owner.email}
-            </p>
-          ))}
+        <p className="truncate text-sm font-semibold text-gray-900">{displayName}</p>
+        {owner.email && (emailClickable ? (
+          <a href={`mailto:${owner.email}`} className="block truncate text-xs text-blue-600 hover:underline">{owner.email}</a>
+        ) : (
+          <p className="truncate text-xs text-blue-600">{owner.email}</p>
+        ))}
       </div>
     </div>
   )

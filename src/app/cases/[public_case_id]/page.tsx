@@ -105,14 +105,32 @@ export default async function CaseDetailPage({
       ? '← 回首頁'
       : '← 回公開案例'
 
+  // 公開案例資料與登入／管理員判斷並行，避免公開頁面多一次等待。
+  const [publicData, authData] = await Promise.all([
+    getCachedPublicCaseDetail(public_case_id),
+    (async () => {
+      const supabase = await createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) {
+        return { isAdmin: false }
+      }
+
+      const { data: adminStatus } =
+        await supabase.rpc('is_admin')
+
+      return { isAdmin: adminStatus === true }
+    })(),
+  ])
+
   const {
     vehicle,
     incidents,
     reportChannels,
     errors: publicDataErrors,
-  } = await getCachedPublicCaseDetail(
-    public_case_id
-  )
+  } = publicData
 
   if (
     !vehicle ||
@@ -135,13 +153,7 @@ export default async function CaseDetailPage({
     )
   )
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  let isAdmin = false
-  if (user) {
-    const { data: adminStatus } = await supabase.rpc('is_admin')
-    isAdmin = adminStatus === true
-  }
+  const { isAdmin } = authData
 
   return (
     <main className="min-h-screen bg-gray-50">

@@ -1,8 +1,5 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
-
 export type OwnerContact = {
   vehicle_id: string
   owner_id: string
@@ -15,6 +12,7 @@ type Props = {
   vehicleId: string
   className?: string
   emailClickable?: boolean
+  owner?: OwnerContact | null
 }
 
 function getInitials(name: string | null, email: string | null) {
@@ -25,33 +23,10 @@ function getInitials(name: string | null, email: string | null) {
 }
 
 export default function AdminOwnerContact({
-  vehicleId,
+  owner,
   className = '',
   emailClickable = true,
 }: Props) {
-  const [owner, setOwner] = useState<OwnerContact | null>(null)
-
-  useEffect(() => {
-    let active = true
-    const supabase = createClient()
-
-    async function load() {
-      const { data: adminStatus } = await supabase.rpc('is_admin')
-      if (adminStatus !== true) return
-
-      const { data, error } = await supabase.rpc('get_admin_case_owner_contacts', {
-        p_vehicle_ids: [vehicleId],
-      })
-
-      if (!active || error) return
-      setOwner((data?.[0] ?? null) as OwnerContact | null)
-    }
-
-    void load()
-    return () => {
-      active = false
-    }
-  }, [vehicleId])
 
   if (!owner) return null
 

@@ -120,6 +120,7 @@ export const getCachedHomePublicData = unstable_cache(
   },
   ['home-public-data-v1'],
   {
+    tags: ['home-public-data-v1'],
     revalidate: CACHE_SECONDS,
   }
 )
@@ -220,6 +221,7 @@ export const getCachedCasesPublicData = unstable_cache(
   },
   ['cases-public-data-v1'],
   {
+    tags: ['cases-public-data-v1'],
     revalidate: CACHE_SECONDS,
   }
 )

@@ -1,5 +1,8 @@
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
+import { revalidatePath, updateTag } from 'next/cache'
+import { createClient } from '@/lib/supabase/server'
+import AdminArchiveCaseForm from '@/components/admin/AdminArchiveCaseForm'
 import { getCachedPublicCaseDetail } from '@/lib/public-data'
 
 const doorLabels: Record<string, string> = {
@@ -45,6 +48,43 @@ const repairLabels: Record<string, string> = {
   repaired_self_paid: '自費維修完成',
   completed: '已完成／結案',
   other: '其他',
+}
+
+async function archiveCaseFromDetail(formData: FormData) {
+  'use server'
+
+  const vehicleId = String(formData.get('vehicle_id') ?? '')
+  const reason = String(formData.get('reason') ?? '').trim()
+
+  if (!vehicleId || reason.length < 2) redirect('/admin?error=archive_direct')
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: adminStatus, error: adminError } = await supabase.rpc('is_admin')
+  if (adminError || adminStatus !== true) redirect('/admin?error=archive_direct')
+
+  const { error } = await supabase.rpc('admin_archive_case', {
+    p_vehicle_id: vehicleId,
+    p_reason: reason,
+  })
+
+  if (error) {
+    console.error('admin_archive_case error:', error)
+    redirect('/admin?error=archive_direct')
+  }
+
+  updateTag('home-public-data-v1')
+  updateTag('cases-public-data-v1')
+  updateTag('public-case-detail-v1')
+  revalidatePath('/')
+  revalidatePath('/cases')
+  revalidatePath('/admin')
+  revalidatePath('/admin/requests')
+  revalidatePath('/my-cases')
+
+  redirect('/admin?done=archived')
 }
 
 export const dynamic = 'force-dynamic'
@@ -95,6 +135,14 @@ export default async function CaseDetailPage({
     )
   )
 
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  let isAdmin = false
+  if (user) {
+    const { data: adminStatus } = await supabase.rpc('is_admin')
+    isAdmin = adminStatus === true
+  }
+
   return (
     <main className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-5xl px-6 py-12">
@@ -135,6 +183,13 @@ export default async function CaseDetailPage({
             本頁為匿名車主案例資料，不顯示車主帳號、姓名或其他個人識別資訊。
           </div>
         </header>
+
+        {isAdmin && (
+          <AdminArchiveCaseForm
+            vehicleId={vehicle.id}
+            action={archiveCaseFromDetail}
+          />
+        )}
 
         {uniqueReportChannels.length > 0 && (
           <section className="mt-6 rounded-3xl border border-blue-100 bg-blue-50/60 p-6">

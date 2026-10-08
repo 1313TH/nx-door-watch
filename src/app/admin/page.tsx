@@ -444,6 +444,7 @@ export default async function AdminPage({
     incident_approved: '後續紀錄已完成審核。',
     incident_needs_revision: '已要求車主修改這筆後續紀錄。',
     incident_rejected: '後續紀錄已拒絕。',
+    archived: '案例已下架並移入封存。',
   }
 
   const errorMessages: Record<string, string> = {
@@ -455,6 +456,7 @@ export default async function AdminPage({
       '要求車主修改時，請填寫具體修改原因，讓車主知道需要修正哪些內容。',
     stale:
       '這筆紀錄的狀態已經改變，可能已被車主修改或撤回。頁面已重新載入最新狀態，請確認後再操作。',
+    archive_direct: '案例下架失敗，請稍後再試；若持續失敗，請確認 Supabase migration 是否已套用。',
   }
 
   const doneMessage = query.done

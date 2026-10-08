@@ -48,8 +48,16 @@ async function requestArchive(formData: FormData) {
       error
     )
 
+    const isDuplicate =
+      error.message?.includes(
+        'ARCHIVE_REQUEST_ALREADY_PENDING'
+      ) ||
+      error.message?.includes(
+        'An active archive request already exists'
+      )
+
     redirect(
-      `/my-cases/${publicCaseId}/request-archive?error=request`
+      `/my-cases/${publicCaseId}/request-archive?error=${isDuplicate ? 'duplicate' : 'request'}`
     )
   }
 
@@ -161,7 +169,9 @@ export default async function RequestArchivePage({
             <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
               {query.error === 'missing'
                 ? '請填寫申請下架原因。'
-                : '下架申請送出失敗，可能已有申請正在處理。'}
+                : query.error === 'duplicate'
+                  ? '已有下架申請正在處理，請等待管理員審核。'
+                  : '下架申請送出失敗，請稍後再試。'}
             </div>
           )}
 

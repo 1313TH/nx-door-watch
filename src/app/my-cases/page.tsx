@@ -231,9 +231,14 @@ export default async function MyCasesPage() {
                       </Link>
 
                       {hasPendingArchiveRequest(vehicle.id) ? (
-                        <span className="inline-flex items-center rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800">
+                        <button
+                          type="button"
+                          disabled
+                          aria-disabled="true"
+                          className="cursor-not-allowed rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800 opacity-80"
+                        >
                           下架申請審核中
-                        </span>
+                        </button>
                       ) : (
                         <Link
                           href={`/my-cases/${vehicle.public_case_id}/request-archive`}

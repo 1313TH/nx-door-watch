@@ -22,14 +22,7 @@ const symptomLabels: Record<string, string> = {
 }
 
 export default async function HomePage() {
-  // 公開資料與登入狀態彼此獨立，並行取得避免首頁多一次等待。
-  const [publicData, authData] = await Promise.all([
-    getCachedHomePublicData(),
-    (async () => {
-      const serverSupabase = await createServerClient()
-      return serverSupabase.auth.getUser()
-    })(),
-  ])
+  const publicData = await getCachedHomePublicData()
 
   const {
     vehicles,
@@ -39,7 +32,6 @@ export default async function HomePage() {
     reportingChannelRows,
     errors: publicDataErrors,
   } = publicData
-
 
   const publicCases = vehicles ?? []
   const publicIncidents = incidents ?? []
